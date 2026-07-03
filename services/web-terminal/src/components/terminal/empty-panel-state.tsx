@@ -4,7 +4,7 @@ interface EmptyPanelStateProps {
   title: string;
 }
 
-/** The explicit no-data state every dense component falls back to (05 §3.6) — never a bare value. */
+/** The explicit no-data state every dense component falls back to — never a bare value. */
 export function EmptyPanelState({ title }: EmptyPanelStateProps) {
   return (
     <Card className="flex-1">

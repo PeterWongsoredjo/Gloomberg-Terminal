@@ -9,7 +9,7 @@ DataT = TypeVar("DataT")
 
 
 class Envelope(BaseModel, Generic[DataT]):
-    """CT-011 — the only shape a serving payload may take (01 §4.10)."""
+    """CT-011 — the only shape a serving payload may take."""
 
     api_version: str = "v1"
     served_at: datetime

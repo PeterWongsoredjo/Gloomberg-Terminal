@@ -15,7 +15,7 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
-# layering law (02 §2.1): marts -> intermediate -> staging -> source, never skipped.
+# layering law: marts -> intermediate -> staging -> source, never skipped.
 models:
   gloomberg:
     staging:

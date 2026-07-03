@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="GLOOMBERG_", env_file=".env")
 
-    host: str = "127.0.0.1"  # loopback only, no public ingress (01 §3.1, SV-10)
+    host: str = "127.0.0.1"  # loopback only, no public ingress (SV-10)
     port: int = 8000
     web_terminal_origin: str = "http://localhost:3000"  # CORS allowlist (SV-10)
 

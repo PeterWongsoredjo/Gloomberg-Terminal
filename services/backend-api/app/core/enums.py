@@ -2,7 +2,7 @@ from enum import StrEnum
 
 
 class SessionPhase(StrEnum):
-    """IDX trading-session phase (01 §2.3), resolved against effective-dated calendar."""
+    """IDX trading-session phase, resolved against effective-dated calendar."""
 
     PRE_OPENING = "PRE_OPENING"
     SESSION_1 = "SESSION_1"

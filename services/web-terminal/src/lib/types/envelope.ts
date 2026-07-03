@@ -1,4 +1,4 @@
-/** IDX trading-session phase (01 §2.3); resolved against effective-dated calendar. */
+/** IDX trading-session phase, resolved against effective-dated calendar. */
 export type SessionPhase =
   | "PRE_OPENING"
   | "SESSION_1"
@@ -21,7 +21,7 @@ export type QualityFlag =
   | "LLM_LOW_CONFIDENCE"
   | "SCHEMA_DRIFT_QUARANTINE";
 
-/** CT-011 — the only shape a serving payload may take (01 §4.10); field names mirror the wire JSON verbatim. */
+/** CT-011 — the only shape a serving payload may take, field names mirror the wire JSON verbatim. */
 export interface Envelope<TData> {
   api_version: string;
   served_at: string;
