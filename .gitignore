@@ -1,0 +1,31 @@
+# Python (services/backend-api, dbt)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Next.js (services/web-terminal)
+node_modules/
+.next/
+next-env.d.ts
+
+# dbt build artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/warehouse/*.duckdb
+dbt/logs/
+dbt/.user.yml
+
+# DuckDB Gold snapshot (published pointer, not source)
+services/backend-api/warehouse/*.duckdb
+
+# env files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db

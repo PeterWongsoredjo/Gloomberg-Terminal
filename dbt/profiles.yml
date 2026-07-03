@@ -1,0 +1,29 @@
+gloomberg:
+  target: analytical
+  outputs:
+    # DuckDB build target — dbt's sole writer (ADR-001). Promotion to the
+    # published snapshot backend-api reads is a Stage 1 mechanic (02 §3.5).
+    analytical:
+      type: duckdb
+      path: "D:/Dev/GloombergTerminal/dbt/warehouse/build.duckdb"
+      extensions: ["httpfs", "postgres"]
+      settings:
+        s3_endpoint: "localhost:9000" # host-mapped MinIO gateway, not container DNS (02 §3.1)
+        s3_url_style: "path"
+        s3_use_ssl: false
+        s3_access_key_id: "{{ env_var('MINIO_KEY') }}"
+        s3_secret_access_key: "{{ env_var('MINIO_SECRET') }}"
+        memory_limit: "5GB" # bounded under the 8GB box cap
+        temp_directory: "D:/Dev/GloombergTerminal/dbt/warehouse/spill"
+        threads: 4 # matches the 4-vCPU cap
+
+    # Native Postgres output for agg_* serving projections (02 §2.1, §3.6).
+    serving:
+      type: postgres
+      host: "localhost"
+      port: 5432
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "gloomberg"
+      schema: "public"
+      threads: 4
