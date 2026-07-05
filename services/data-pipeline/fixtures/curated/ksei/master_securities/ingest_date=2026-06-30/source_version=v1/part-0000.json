@@ -1,0 +1,11 @@
+{
+  "data": [
+    {"Code": "BBCA", "IsinCode": "ID1000109507", "Type": "EQUITY", "Sector": "FINANCE", "Status": "ACTIVE"},
+    {"Code": "BBRI", "IsinCode": "ID1000118201", "Type": "EQUITY", "Sector": "FINANCE", "Status": "ACTIVE"},
+    {"Code": "TLKM", "IsinCode": "ID1000129601", "Type": "EQUITY", "Sector": "INFRASTRUCTURE", "Status": "ACTIVE"},
+    {"Code": "ASII", "IsinCode": "ID1000122807", "Type": "EQUITY", "Sector": "INDUSTRIALS", "Status": "ACTIVE"},
+    {"Code": "AADI", "IsinCode": "ID1000207509", "Type": "EQUITY", "Sector": "ENERGY", "Status": "ACTIVE"},
+    {"Code": "BMRI", "IsinCode": "ID-MALFORMED", "Type": "EQUITY", "Sector": "FINANCE", "Status": "ACTIVE"},
+    {"Code": "SBSK", "IsinCode": "IDA000123456", "Type": "BOND", "Sector": "", "Status": "ACTIVE"}
+  ]
+}

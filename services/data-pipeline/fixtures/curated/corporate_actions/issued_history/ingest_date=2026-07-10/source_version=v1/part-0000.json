@@ -1,0 +1,6 @@
+{
+  "data": [
+    {"id": 999001, "KodeEmiten": "AADI", "TanggalPencatatan": "2026-07-10T00:00:00", "JenisTindakan": "stockSplit", "JumlahSaham": 31147567040, "JumlahSahamSetelahTindakan": 38934458800},
+    {"id": 999002, "KodeEmiten": "AALI", "TanggalPencatatan": "2026-07-15T00:00:00", "JenisTindakan": "hmetd", "JumlahSaham": 0, "JumlahSahamSetelahTindakan": 0}
+  ]
+}

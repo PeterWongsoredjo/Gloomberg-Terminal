@@ -1,0 +1,10 @@
+{
+  "data": [
+    {"index_id": "LQ45", "ticker": "BBCA", "effective_from": "2026-02-02", "effective_to": "2026-04-30", "review_period": "2 February 2026 - 30 April 2026 (Major Evaluation)"},
+    {"index_id": "LQ45", "ticker": "BBRI", "effective_from": "2026-02-02", "effective_to": "2026-04-30", "review_period": "2 February 2026 - 30 April 2026 (Major Evaluation)"},
+    {"index_id": "LQ45", "ticker": "TLKM", "effective_from": "2026-02-02", "effective_to": "2026-04-30", "review_period": "2 February 2026 - 30 April 2026 (Major Evaluation)"},
+    {"index_id": "LQ45", "ticker": "ASII", "effective_from": "2026-02-02", "effective_to": "2026-04-30", "review_period": "2 February 2026 - 30 April 2026 (Major Evaluation)"},
+    {"index_id": "IDX30", "ticker": "BBCA", "effective_from": "2026-02-02", "effective_to": "2026-04-30", "review_period": "2 February 2026 - 30 April 2026 (Major Evaluation)"},
+    {"index_id": "IDX30", "ticker": "ASII", "effective_from": "2026-02-02", "effective_to": "2026-04-30", "review_period": "2 February 2026 - 30 April 2026 (Major Evaluation)"}
+  ]
+}
