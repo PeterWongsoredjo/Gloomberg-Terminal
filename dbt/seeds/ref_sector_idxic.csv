@@ -1,0 +1,12 @@
+sector_idxic,sector_name_en,sector_name_id
+IDXENER,Energy,Energi
+IDXBASIC,Basic Materials,Barang Baku
+IDXINDUS,Industrials,Perindustrian
+IDXNONCYC,Consumer Non-Cyclicals,Barang Konsumen Primer
+IDXCYC,Consumer Cyclicals,Barang Konsumen Non-Primer
+IDXHEALTH,Healthcare,Kesehatan
+IDXFINANCE,Financials,Keuangan
+IDXPROPERT,Properties & Real Estate,Properti & Real Estat
+IDXTECHNO,Technology,Teknologi
+IDXINFRA,Infrastructures,Infrastruktur
+IDXTRANS,Transportation & Logistic,Transportasi & Logistik

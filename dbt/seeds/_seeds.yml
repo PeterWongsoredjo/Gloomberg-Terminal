@@ -1,0 +1,44 @@
+version: 2
+
+seeds:
+  - name: ref_price_band
+    description: "CT-006 effective-dated tick size and ARA/ARB limits per price band."
+    config:
+      column_types:
+        band_id: integer
+        effective_from: date
+        effective_to: date
+        price_low_idr: bigint
+        price_high_idr: bigint
+        tick_idr: bigint
+        ara_pct: "decimal(5,4)"
+        arb_pct: "decimal(5,4)"
+    columns:
+      - name: band_id
+        data_tests: [unique, not_null]
+      - name: tick_idr
+        data_tests: [not_null]
+
+  - name: ref_market_calendar
+    description: "CT-005 calendar exceptions (holidays, special sessions). Spine is generated."
+    config:
+      column_types:
+        trade_date: date
+        is_trading_day: boolean
+    columns:
+      - name: trade_date
+        data_tests: [unique, not_null]
+
+  - name: ref_sector_idxic
+    description: "IDX-IC sector crosswalk: canonical code to English and Indonesian names."
+    columns:
+      - name: sector_idxic
+        data_tests: [unique, not_null]
+      - name: sector_name_id
+        data_tests: [unique, not_null]
+
+  - name: ref_special_notation
+    description: "Notasi Khusus single-letter code dictionary."
+    columns:
+      - name: notation_code
+        data_tests: [unique, not_null]

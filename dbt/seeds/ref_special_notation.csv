@@ -1,0 +1,12 @@
+notation_code,description_en,description_id
+B,Bankruptcy or PKPU petition filed,Permohonan pernyataan pailit atau PKPU
+M,PKPU petition filed,Permohonan PKPU
+E,Negative equity in latest financials,Ekuitas negatif pada laporan keuangan terakhir
+A,Adverse audit opinion,Opini audit tidak wajar
+D,Disclaimer of audit opinion,Opini audit tidak menyatakan pendapat
+L,Financial report not yet submitted,Belum menyampaikan laporan keuangan
+S,No operating revenue reported,Belum membukukan pendapatan usaha
+T,Material litigation in progress,Terdapat perkara hukum yang material
+F,Sanction imposed by the financial regulator,Dikenakan sanksi oleh OJK
+Y,Annual general meeting not yet held,Belum menyelenggarakan RUPS tahunan
+X,Listed on the Special Monitoring board,Tercatat di Papan Pemantauan Khusus
