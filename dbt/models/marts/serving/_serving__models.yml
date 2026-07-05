@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: agg_live_tape
+    description: "Live Tape projection: latest trading row per security."
+    columns:
+      - name: security_id
+        data_tests: [not_null]
+      - name: data_as_of
+        data_tests: [not_null]
+  - name: agg_security_snapshot
+    description: "Insight Panel header: identity plus latest close."
+    columns:
+      - name: security_id
+        data_tests: [unique, not_null]
+      - name: data_as_of
+        data_tests: [not_null]
+  - name: agg_pipeline_telemetry
+    description: "Data Telemetry: coverage, quarantine counts, freshness per run."
+    columns:
+      - name: data_as_of
+        data_tests: [not_null]
+
+exposures:
+  - name: live_tape_panel
+    label: "Live Tape"
+    type: application
+    maturity: low
+    url: "http://localhost:3000"
+    depends_on: [ref('agg_live_tape')]
+    owner:
+      name: Gloomberg Terminal
+      email: terminal@localhost
+
+  - name: insight_panel
+    label: "Insight Panel"
+    type: application
+    maturity: low
+    url: "http://localhost:3000"
+    depends_on: [ref('agg_security_snapshot')]
+    owner:
+      name: Gloomberg Terminal
+      email: terminal@localhost
+
+  - name: data_telemetry_panel
+    label: "Data Telemetry"
+    type: application
+    maturity: low
+    url: "http://localhost:3000"
+    depends_on: [ref('agg_pipeline_telemetry')]
+    owner:
+      name: Gloomberg Terminal
+      email: terminal@localhost

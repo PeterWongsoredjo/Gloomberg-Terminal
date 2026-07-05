@@ -1,0 +1,148 @@
+version: 2
+
+models:
+  - name: dim_security
+    description: "SCD-2 security identity (CT-004). One row per version."
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "regexp_matches(ticker, '^[A-Z]{4}$')"
+      - dbt_utils.expression_is_true:
+          expression: "isin is null or regexp_matches(isin, '^ID[A-Z0-9]{9}[0-9]$')"
+    columns:
+      - name: security_sk
+        description: "Per-version surrogate key."
+        data_tests: [unique, not_null]
+      - name: security_id
+        description: "Stable natural key across versions."
+        data_tests:
+          - not_null
+          - scd_one_current
+      - name: ticker
+        data_tests: [not_null]
+      - name: board
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [MAIN, DEVELOPMENT, ACCELERATION, NEW_ECONOMY, WATCHLIST]
+      - name: sector_idxic
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_sector')
+              field: sector_idxic
+
+  - name: dim_trade_date
+    columns:
+      - name: trade_date
+        data_tests: [unique, not_null]
+      - name: session_template
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [NORMAL, RAMADAN, HALF_DAY, HALTED]
+
+  - name: dim_price_band
+    columns:
+      - name: band_id
+        data_tests: [unique, not_null]
+      - name: tick_idr
+        data_tests: [not_null]
+
+  - name: dim_sector
+    columns:
+      - name: sector_idxic
+        data_tests: [unique, not_null]
+
+  - name: dim_board
+    columns:
+      - name: board
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              values: [MAIN, DEVELOPMENT, ACCELERATION, NEW_ECONOMY, WATCHLIST]
+
+  - name: dim_special_notation
+    columns:
+      - name: notation_code
+        data_tests: [unique, not_null]
+
+  - name: fct_daily_trade
+    description: "Grain: one row per (security_id, trade_date)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [security_id, trade_date]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_security')
+              field: security_id
+      - name: trade_date
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_trade_date')
+              field: trade_date
+      - name: close_idr
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+          - tick_aligned:
+              config:
+                severity: warn
+      - name: open_idr
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+      - name: volume_shares
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+      - name: price_series_integrity
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [CLEAN, ADJUSTMENT_PENDING]
+
+  - name: fct_foreign_flow
+    description: "Grain: one row per (security_id, trade_date)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [security_id, trade_date]
+    columns:
+      - name: security_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_security')
+              field: security_id
+
+  - name: fct_corporate_action
+    description: "Grain: one row per event_id."
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: event_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                [STOCK_SPLIT, REVERSE_SPLIT, BONUS_SHARES, STOCK_DIVIDEND,
+                 RIGHTS_ISSUE, DELISTING, RELISTING]
+
+  - name: fct_index_level
+    description: "Grain: one row per (index_id, trade_date)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [index_id, trade_date]
+    columns:
+      - name: index_id
+        data_tests: [not_null]
+      - name: trade_date
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_trade_date')
+              field: trade_date

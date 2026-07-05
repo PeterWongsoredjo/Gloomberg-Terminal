@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: stg_idx_summary__daily_trade
+    description: "Typed IDX daily summary. Bad rows are flagged in _dq_flags, not dropped."
+    columns:
+      - name: trade_date
+        data_tests: [not_null]
+
+  - name: stg_manifests
+    description: "One row per CT-003 ingestion run."
+    columns:
+      - name: ingest_run_id
+        data_tests: [not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              values: [SUCCESS, PARTIAL, FAILED]
+      - name: coverage_ratio
+        data_tests:
+          - coverage_ok:
+              threshold: 0.95
+              config:
+                severity: warn

@@ -1,0 +1,85 @@
+version: 2
+
+sources:
+  # IDX end-of-day trading summary + index levels. Foreign flow is carried inside
+  # daily_trade (ForeignBuy/ForeignSell), so it has no separate upstream feed.
+  - name: bronze_idx_summary
+    description: "Raw IDX TradingSummary payloads, Hive-partitioned in MinIO Bronze (CT-002)."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 20, period: hour }
+      error_after: { count: 30, period: hour }
+    tables:
+      - name: daily_trade
+        description: "IDX daily stock summary (Ringkasan Saham). Raw, untyped envelope."
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/idx_summary/daily_trade/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+      - name: index_level
+        description: "IDX daily index summary (IHSG and index levels)."
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/idx_summary/index_level/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+
+  - name: bronze_corporate_actions
+    description: "IDX share-count-changing corporate actions (GetIssuedHistory)."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 30, period: hour }
+      error_after: { count: 48, period: hour }
+    tables:
+      - name: issued_history
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/corporate_actions/issued_history/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+
+  - name: bronze_company_profile
+    description: "IDX listed-company profiles: board, sector, listing date."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 48, period: hour }
+      error_after: { count: 96, period: hour }
+    tables:
+      - name: profiles
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/company_profile/profiles/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+
+  - name: bronze_index_constituents
+    description: "IDX index membership by review period (normalized from the review archive)."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 30, period: day }
+      error_after: { count: 120, period: day }
+    tables:
+      - name: membership
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/index_constituents/membership/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+
+  - name: bronze_ksei
+    description: "KSEI monthly Master Securities: the ISIN authority for IDX equities."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 40, period: day }
+      error_after: { count: 60, period: day }
+    tables:
+      - name: master_securities
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/ksei/master_securities/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+
+  # CT-003 ingestion manifests: the coverage + lineage anchor Silver validates against.
+  - name: bronze_manifests
+    description: "One CT-003 manifest per ingestion run; carries coverage and status."
+    tables:
+      - name: manifests
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/_manifests/*/*/*/*.json', format='auto', union_by_name=true)"
+
+  # Registered for the freshness contract; its staging model arrives with the
+  # sentiment flow in Stage 3 (no Gold consumer exists for news yet).
+  - name: bronze_news_rss
+    description: "Financial news RSS items, normalized to JSON at ingest (Stage 2)."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 6, period: hour }
+      error_after: { count: 12, period: hour }
+    tables:
+      - name: items
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/news_rss/items/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
