@@ -5,7 +5,8 @@ gloomberg:
     # published snapshot backend-api reads is a Stage 1 mechanic.
     analytical:
       type: duckdb
-      path: "D:/Dev/GloombergTerminal/dbt/warehouse/build.duckdb"
+      # relative to the dbt project dir: correct on this box and portable to the VPS
+      path: "warehouse/build.duckdb"
       extensions: ["httpfs", "postgres"]
       settings:
         s3_endpoint: "localhost:9000" # host-mapped MinIO gateway, not container DNS
@@ -14,14 +15,14 @@ gloomberg:
         s3_access_key_id: "{{ env_var('MINIO_KEY') }}"
         s3_secret_access_key: "{{ env_var('MINIO_SECRET') }}"
         memory_limit: "5GB" # bounded under the 8GB box cap
-        temp_directory: "D:/Dev/GloombergTerminal/dbt/warehouse/spill"
+        temp_directory: "warehouse/spill"
         threads: 4 # matches the 4-vCPU cap
 
     # Native Postgres output for agg_* serving projections.
     serving:
       type: postgres
       host: "localhost"
-      port: 5432
+      port: "{{ env_var('POSTGRES_PORT', '5432') | int }}" # 5433 local, 5432 on VPS
       user: "{{ env_var('POSTGRES_USER') }}"
       password: "{{ env_var('POSTGRES_PASSWORD') }}"
       dbname: "gloomberg"
