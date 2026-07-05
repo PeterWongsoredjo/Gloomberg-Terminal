@@ -1,7 +1,7 @@
 [project]
 name = "gloomberg-backend-api"
 version = "0.1.0"
-description = "Gloomberg Terminal serving layer — async FastAPI backend (docs/architecture/05)"
+description = "Gloomberg Terminal serving layer — async FastAPI backend (docs/architecture/06)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -12,6 +12,7 @@ dependencies = [
     "duckdb>=1.1",
     "httpx>=0.28",
     "anyio>=4.6",
+    "prefect>=3.7.7",
 ]
 
 [project.optional-dependencies]
