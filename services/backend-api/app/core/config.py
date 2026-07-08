@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"  # loopback only, no public ingress (SV-10)
     port: int = 8000
     web_terminal_origin: str = "http://localhost:3000"  # CORS allowlist (SV-10)
+    api_token: str = ""  # stub operator token; empty means loopback-trust (SV-10)
 
     postgres_dsn: str = "postgresql://localhost:5432/gloomberg"
     duckdb_gold_path: str = "warehouse/gold.duckdb"

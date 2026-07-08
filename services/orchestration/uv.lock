@@ -666,6 +666,7 @@ dependencies = [
     { name = "minio" },
     { name = "psycopg", extra = ["binary"] },
     { name = "python-ulid" },
+    { name = "pytz" },
     { name = "zstandard" },
 ]
 
@@ -678,6 +679,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3" },
     { name = "python-ulid", specifier = ">=2.7" },
+    { name = "pytz", specifier = ">=2026.2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7" },
     { name = "zstandard", specifier = ">=0.23" },
 ]
