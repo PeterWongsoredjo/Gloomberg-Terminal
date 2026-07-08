@@ -1,0 +1,112 @@
+"""finalize: wrap accepted drafts in CT-009, gate confidence, and write the ledger.
+
+Only drafts that passed every hard gate become artifacts; a failing draft is dropped and never
+persisted, so a malformed or ungrounded output cannot reach fct_sentiment. The run ends
+SUCCEEDED when at least one artifact survives, otherwise DEGRADED, visible and non-fabricating.
+"""
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+from langchain_core.runnables import RunnableConfig
+
+from app.agentic import cache, ledger
+from app.agentic.config import AgenticSettings
+from app.agentic.confidence import apply_gate
+from app.agentic.deps import GraphDeps
+from app.agentic.ids import new_ulid
+from app.agentic.nodes._common import get_deps, value_confidence
+from app.agentic.objectives import spec_for_type
+from app.agentic.schemas import (
+    Ct009Artifact,
+    ExtractionValue,
+    InsightValue,
+    Provenance,
+    SentimentValue,
+    Subject,
+    TokenUsage,
+    Window,
+)
+from app.agentic.state import AgentState
+
+
+def _build_artifact(draft: dict[str, Any], state: AgentState, settings: AgenticSettings) -> Ct009Artifact:
+    """Wraps one accepted draft into a confidence-gated CT-009 envelope."""
+    spec = spec_for_type(draft["artifact_type"])
+    value = cast(
+        SentimentValue | ExtractionValue | InsightValue,
+        spec.value_model.model_validate(draft["value"]),
+    )
+    confidence = value_confidence(spec.objective, draft["value"])
+    flags = apply_gate(spec.objective, confidence, [], settings)
+    return Ct009Artifact(
+        artifact_id=new_ulid(),
+        artifact_type=spec.artifact_type,
+        subject=Subject(**draft["subject"]),
+        window=Window.model_validate({"from": state["trade_date"], "to": state["trade_date"]}),
+        value=value,
+        confidence=confidence,
+        provenance=Provenance(
+            provider=draft["provider"],
+            model=draft["model"],
+            prompt_version=state["working"]["prompt_version"],
+            trace_id=state.get("trace_id"),
+            input_source_refs=draft["evidence_pool"],
+            token_usage=TokenUsage(prompt=draft["prompt_tokens"], completion=draft["completion_tokens"]),
+            generated_at=draft["generated_at"],
+            loop_iterations=state["budget"]["consumed_iterations"],
+        ),
+        quality_flags=flags,
+    )
+
+
+async def _persist(deps: GraphDeps, state: AgentState, new_dicts: list[dict[str, Any]]) -> None:
+    """Writes every artifact to the ledger and records the run's terminal status."""
+    if deps.pg_pool is None:
+        return
+    for artifact in [*state.get("artifacts", []), *new_dicts]:
+        await ledger.write_artifact(deps.pg_pool, state["run_id"], Ct009Artifact.model_validate(artifact))
+    if new_dicts:
+        await cache.put(deps.pg_pool, state["working"]["cache_key"], new_dicts)
+
+
+async def _record_health(deps: GraphDeps) -> None:
+    """Persists each provider's breaker state after the run."""
+    if deps.pg_pool is None:
+        return
+    for name, slot in deps.slots.items():
+        await ledger.record_provider_health(
+            deps.pg_pool,
+            provider=name,
+            breaker_state=slot.breaker.state,
+            consecutive_failures=slot.breaker.failure_count,
+            rpd_consumed=0,
+        )
+
+
+async def finalize(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+    """Persists surviving artifacts, sets the terminal status, closes the run."""
+    deps = get_deps(config)
+    settings = deps.settings
+    accepted = [d for d in state["working"].get("draft_artifacts", []) if d.get("passed")]
+
+    async with deps.tracer.span("finalize", state["run_id"]) as span:
+        new_dicts = [_build_artifact(d, state, settings).model_dump(by_alias=True, mode="json") for d in accepted]
+        total = len(state.get("artifacts", [])) + len(new_dicts)
+        status = "DEGRADED" if state.get("abort_reason") or total == 0 else "SUCCEEDED"
+        span.set_output({"artifacts": total, "status": status})
+
+        await _persist(deps, state, new_dicts)
+        await _record_health(deps)
+        if deps.pg_pool is not None:
+            await ledger.finish_run(
+                deps.pg_pool,
+                run_id=state["run_id"],
+                status=status,
+                abort_reason=state.get("abort_reason"),
+                consumed_tokens=state["budget"]["consumed_tokens"],
+                consumed_iterations=state["budget"]["consumed_iterations"],
+            )
+
+    return {"artifacts": new_dicts, "status": status}
