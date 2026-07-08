@@ -71,10 +71,10 @@ sources:
         meta:
           external_location: "read_json('s3://gloomberg-bronze/_manifests/*/*/*/*.json', format='auto', union_by_name=true)"
 
-  # Registered for the freshness contract; its staging model arrives with the
-  # sentiment flow in Stage 3 (no Gold consumer exists for news yet).
+  # Financial news RSS, normalized to JSON items by the sentiment flow; the agent's
+  # news context and stg_news_rss both read this.
   - name: bronze_news_rss
-    description: "Financial news RSS items, normalized to JSON at ingest (Stage 2)."
+    description: "Financial news RSS items, normalized to JSON items."
     loaded_at_field: "cast(ingest_date as timestamp)"
     freshness:
       warn_after: { count: 6, period: hour }
@@ -83,3 +83,19 @@ sources:
       - name: items
         meta:
           external_location: "read_json('s3://gloomberg-bronze/news_rss/items/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+
+  # CT-009 artifacts landed from the agentic Postgres ledger, one dataset per type.
+  # The 02 projection turns these into fct_sentiment / fct_insight.
+  - name: bronze_agent_artifact
+    description: "CT-009 LLM artifacts projected from the agentic ledger into Bronze."
+    loaded_at_field: "cast(ingest_date as timestamp)"
+    freshness:
+      warn_after: { count: 24, period: hour }
+      error_after: { count: 48, period: hour }
+    tables:
+      - name: sentiment
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/agent_artifact/sentiment/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+      - name: insight
+        meta:
+          external_location: "read_json('s3://gloomberg-bronze/agent_artifact/insight/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"

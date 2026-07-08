@@ -20,6 +20,17 @@ models:
     columns:
       - name: data_as_of
         data_tests: [not_null]
+  - name: agg_sentiment_matrix
+    description: "Sentiment Matrix: latest sentiment per security with identity and freshness."
+    columns:
+      - name: security_id
+        data_tests: [unique, not_null]
+      - name: sentiment_label
+        data_tests:
+          - accepted_values:
+              values: [BEARISH, NEUTRAL, BULLISH]
+      - name: data_as_of
+        data_tests: [not_null]
 
 exposures:
   - name: live_tape_panel
@@ -48,6 +59,16 @@ exposures:
     maturity: low
     url: "http://localhost:3000"
     depends_on: [ref('agg_pipeline_telemetry')]
+    owner:
+      name: Gloomberg Terminal
+      email: terminal@localhost
+
+  - name: sentiment_matrix_panel
+    label: "Sentiment Matrix"
+    type: application
+    maturity: low
+    url: "http://localhost:3000"
+    depends_on: [ref('agg_sentiment_matrix')]
     owner:
       name: Gloomberg Terminal
       email: terminal@localhost
