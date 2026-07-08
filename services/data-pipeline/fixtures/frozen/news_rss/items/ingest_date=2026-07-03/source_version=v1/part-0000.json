@@ -1,0 +1,32 @@
+[
+  {
+    "item_id": "cnbc_market:aa11bb22cc33dd44",
+    "source": "cnbc_market",
+    "lang": "id",
+    "title": "BBCA cetak laba bersih naik, kredit tumbuh dua digit",
+    "summary": "Bank BCA (BBCA) membukukan laba bersih yang naik ditopang pertumbuhan kredit dan margin bunga yang stabil.",
+    "url": "https://www.cnbcindonesia.com/market/bbca-laba-naik",
+    "published_at": "2026-07-03T02:15:00+00:00",
+    "tickers": ["BBCA"]
+  },
+  {
+    "item_id": "kontan_investasi:ee55ff66aa77bb88",
+    "source": "kontan_investasi",
+    "lang": "id",
+    "title": "Asing lepas saham BBRI, net sell berlanjut",
+    "summary": "Investor asing mencatat net sell pada saham BBRI seiring rotasi sektor perbankan.",
+    "url": "https://investasi.kontan.co.id/bbri-net-sell",
+    "published_at": "2026-07-03T03:05:00+00:00",
+    "tickers": ["BBRI"]
+  },
+  {
+    "item_id": "antara_ekonomi:cc99dd00ee11ff22",
+    "source": "antara_ekonomi",
+    "lang": "id",
+    "title": "TLKM umumkan ekspansi data center, prospek positif",
+    "summary": "Telkom (TLKM) mengumumkan ekspansi data center yang dinilai analis menambah prospek pendapatan.",
+    "url": "https://www.antaranews.com/tlkm-data-center",
+    "published_at": "2026-07-03T01:40:00+00:00",
+    "tickers": ["TLKM"]
+  }
+]

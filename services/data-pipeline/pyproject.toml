@@ -4,12 +4,13 @@ version = "0.1.0"
 description = "Gloomberg Terminal medallion glue — Bronze load, Gold publish, Postgres sync (docs/architecture/02)"
 requires-python = ">=3.12"
 dependencies = [
-    "curl-cffi>=0.7",   # TLS-fingerprint client for Cloudflare-protected IDX/KSEI
-    "duckdb>=1.1",      # Gold publish + postgres-extension sync
-    "minio>=7.2",       # Bronze object store client
-    "zstandard>=0.23",  # CT-002 payload compression
+    "curl-cffi>=0.7", # TLS-fingerprint client for Cloudflare-protected IDX/KSEI
+    "duckdb>=1.1", # Gold publish + postgres-extension sync
+    "minio>=7.2", # Bronze object store client
+    "zstandard>=0.23", # CT-002 payload compression
     "python-ulid>=2.7", # ingest_run_id / event_id
     "psycopg[binary]>=3.2",
+    "pytz>=2026.2",
 ]
 
 [project.optional-dependencies]

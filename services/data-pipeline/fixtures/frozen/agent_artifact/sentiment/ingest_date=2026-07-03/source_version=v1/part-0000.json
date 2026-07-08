@@ -1,0 +1,68 @@
+[
+  {
+    "artifact_id": "01SENTBBCA0000000000000000",
+    "run_id": "01RUNFIXTURE00000000000000",
+    "artifact_type": "SENTIMENT",
+    "security_id": null,
+    "ticker": "BBCA",
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "sentiment_score": 0.42,
+      "sentiment_label": "BULLISH",
+      "drivers": ["laba bersih naik", "pertumbuhan kredit dua digit"],
+      "evidence_item_ids": ["cnbc_market:aa11bb22cc33dd44"],
+      "self_confidence": 0.81
+    },
+    "confidence": 0.81,
+    "quality_flags": [],
+    "provider": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "prompt_version": "sent-v4",
+    "generated_at": "2026-07-03T09:20:11+00:00"
+  },
+  {
+    "artifact_id": "01SENTBBRI0000000000000000",
+    "run_id": "01RUNFIXTURE00000000000000",
+    "artifact_type": "SENTIMENT",
+    "security_id": null,
+    "ticker": "BBRI",
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "sentiment_score": -0.38,
+      "sentiment_label": "BEARISH",
+      "drivers": ["asing net sell", "rotasi sektor perbankan"],
+      "evidence_item_ids": ["kontan_investasi:ee55ff66aa77bb88"],
+      "self_confidence": 0.7
+    },
+    "confidence": 0.7,
+    "quality_flags": [],
+    "provider": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "prompt_version": "sent-v4",
+    "generated_at": "2026-07-03T09:20:12+00:00"
+  },
+  {
+    "artifact_id": "01SENTTLKM0000000000000000",
+    "run_id": "01RUNFIXTURE00000000000000",
+    "artifact_type": "SENTIMENT",
+    "security_id": null,
+    "ticker": "TLKM",
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "sentiment_score": 0.18,
+      "sentiment_label": "NEUTRAL",
+      "drivers": ["ekspansi data center"],
+      "evidence_item_ids": ["antara_ekonomi:cc99dd00ee11ff22"],
+      "self_confidence": 0.44
+    },
+    "confidence": 0.44,
+    "quality_flags": ["LLM_LOW_CONFIDENCE"],
+    "provider": "groq",
+    "model": "llama-3.3-70b-versatile",
+    "prompt_version": "sent-v4",
+    "generated_at": "2026-07-03T09:20:13+00:00"
+  }
+]

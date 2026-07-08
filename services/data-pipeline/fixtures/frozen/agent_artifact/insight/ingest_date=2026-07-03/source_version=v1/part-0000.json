@@ -1,0 +1,27 @@
+[
+  {
+    "artifact_id": "01INSTBBRI0000000000000000",
+    "run_id": "01RUNINSIGHT000000000000000",
+    "artifact_type": "INSIGHT",
+    "security_id": null,
+    "ticker": "BBRI",
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "headline": "BBRI: bearish news tone against continued foreign outflow",
+      "narrative": "News tone on BBRI is negative while foreign investors keep net selling; the two signals point the same way this session.",
+      "signals": [
+        {"type": "SENTIMENT", "ref_artifact_id": "01SENTBBRI0000000000000000", "value": null},
+        {"type": "FLOW", "ref_artifact_id": null, "value": "net_foreign negative"}
+      ],
+      "contradictions": [],
+      "confidence": 0.62
+    },
+    "confidence": 0.62,
+    "quality_flags": [],
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "prompt_version": "ins-v1",
+    "generated_at": "2026-07-03T09:25:00+00:00"
+  }
+]

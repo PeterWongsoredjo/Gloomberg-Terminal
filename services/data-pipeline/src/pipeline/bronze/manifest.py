@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 from datetime import date, datetime, timezone
 from typing import Any
+
+
+def deterministic_run_id(idempotency_key: str) -> str:
+    """Stable 26-char run id from an idempotency key, so a re-run replaces, not piles up."""
+    digest = hashlib.sha256(idempotency_key.encode()).digest()
+    return base64.b32encode(digest).decode().rstrip("=")[:26]
 
 
 def content_sha256(payloads: list[bytes]) -> str:

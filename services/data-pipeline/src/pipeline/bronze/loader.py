@@ -8,8 +8,6 @@ expected_universe, missing_tickers). A deterministic run id makes a re-load repl
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import sys
 from datetime import date, datetime, timezone
@@ -19,16 +17,10 @@ from typing import Any
 from minio import Minio
 
 from pipeline.bronze.ingest import client, land_payloads
-from pipeline.bronze.manifest import idempotency_key
+from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
 META_FILE = "_meta.json"
-
-
-def _deterministic_run_id(idem_key: str) -> str:
-    """Stable 26-char id from the idempotency key so a re-load replaces, not piles up."""
-    digest = hashlib.sha256(idem_key.encode()).digest()
-    return base64.b32encode(digest).decode().rstrip("=")[:26]
 
 
 def _parse_partition(part_dir: Path, kind_root: Path) -> tuple[str, str, date, str]:
@@ -47,7 +39,7 @@ def load_partition(minio: Minio, part_dir: Path, kind_root: Path) -> dict[str, A
     """Loads one partition's payloads + manifest into Bronze; returns the manifest."""
     source, dataset, trade_date, source_version = _parse_partition(part_dir, kind_root)
     meta = json.loads((part_dir / META_FILE).read_text(encoding="utf-8"))
-    run_id = _deterministic_run_id(idempotency_key(source, dataset, trade_date, source_version))
+    run_id = deterministic_run_id(idempotency_key(source, dataset, trade_date, source_version))
     payloads = [part.read_bytes() for part in sorted(part_dir.glob("part-*.json"))]
 
     return land_payloads(
