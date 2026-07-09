@@ -1,10 +1,3 @@
-"""OR-01 phase 2: land raw payloads in MinIO Bronze, one retryable task per feed.
-
-Live mode fans out over the JSON feeds with OR-02 retries and the minio_fetch concurrency
-tag; a source that fails after its budget lands a FAILED manifest and degrades only its own
-coverage, never the whole flow. Fixture mode replays committed Bronze through the same primitive.
-"""
-
 from __future__ import annotations
 
 from datetime import date
@@ -35,13 +28,12 @@ from orchestration.retries import (
     retry_condition_fn=retry_on_transient_fetch,
 )
 def ingest_feed(feed_name: str, trade_date: date) -> dict[str, Any]:
-    """Fetches one live feed into Bronze; raises FetchError (transient retries, else fails)."""
     settings = get_settings()
     return fetch_and_land(client(settings), FEEDS[feed_name], trade_date)
 
 
 def land_failed(feed_name: str, trade_date: date, reason: str) -> dict[str, Any]:
-    """Emits a FAILED CT-003 manifest for a feed whose fetch gave up, no Bronze written."""
+    """Emits a FAILED manifest for a feed whose fetch gave up, no Bronze written."""
     settings = get_settings()
     return emit_failed_manifest(client(settings), FEEDS[feed_name], trade_date, reason)
 

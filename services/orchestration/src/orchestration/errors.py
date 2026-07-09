@@ -1,5 +1,3 @@
-"""Typed orchestration failures so OR-02 retries only transient classes, never real errors."""
-
 from __future__ import annotations
 
 

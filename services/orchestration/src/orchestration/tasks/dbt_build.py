@@ -1,9 +1,5 @@
-"""OR-01 phase 5: build Silver/Gold as phased, selector-scoped dbt subprocess calls.
-
-Phases run in the 02 3.8 order, one subprocess each, so a failure is isolated and the
-memory footprint of any single invocation stays bounded. Per-phase invocation ids and test
-counts come from run_results.json, never stdout parsing. The task holds the duckdb_writer
-lease so it can never race the single Gold writer. An error-severity test STOPS before promote.
+"""
+Runs dbt transformations sequentially (Staging -> Intermediate -> Marts) in isolated subprocesses.
 """
 
 from __future__ import annotations

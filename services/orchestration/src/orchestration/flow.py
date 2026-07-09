@@ -1,9 +1,10 @@
-"""gloomberg_daily_flow — the OR-01 daily DAG that conducts the whole medallion spine.
+"""
+gloomberg_daily_flow :
 
-Order realizes 01 5.1 and 02 3.8: guard -> ingest -> coverage gate -> dbt build ->
-promote -> agentic trigger -> finalize. Each phase is an isolated, retryable task; a failed
-phase emits its OR-06 event and does not silently cascade. trigger_agentic fires only after a
-released promote, and an agentic or trigger failure degrades that step alone, never the data.
+guard -> ingest -> coverage gate -> dbt build -> promote 
+-> agentic trigger -> finalize. Each phase is an isolated, retryable task 
+
+a failed phase emits its event and does not silently cascade
 """
 
 from __future__ import annotations
@@ -37,17 +38,14 @@ _SEVERITY = {"SUCCESS": 0, "SKIPPED": 0, "PARTIAL": 1, "DEGRADED": 2, "FAILED": 
 
 
 def _now() -> datetime:
-    """Current UTC instant, per CT-001."""
     return datetime.now(timezone.utc)
 
 
 def _wib_today() -> date:
-    """Today's WIB trade_date = (utc + 7h).date(), per CT-001/ADR-006."""
     return (_now() + timedelta(hours=7)).date()
 
 
 def _coerce_date(value: str | None) -> date:
-    """Resolves the trade_date param, defaulting to today's WIB date."""
     return date.fromisoformat(value) if value else _wib_today()
 
 
@@ -58,7 +56,6 @@ def _fixture_roots() -> list[str]:
 
 
 def _emit(dsn: str, flow_run_id: str, td: date, phase: str, result: PhaseResult, started: datetime) -> None:
-    """Builds and best-effort sinks one OR-06 run-state event from a phase result."""
     event = build_event(
         flow_run_id=flow_run_id,
         trade_date=td,
@@ -83,8 +80,6 @@ def _run_phase(
     fn: Callable[[], PhaseResult],
     on_error: Callable[[Exception], PhaseResult | None] | None = None,
 ) -> PhaseResult:
-    """Times a phase, runs it, emits its event. On error, an on_error handler may return a
-    degraded result to record; otherwise the phase emits FAILED and re-raises."""
     started = _now()
     try:
         result = fn()
@@ -99,7 +94,6 @@ def _run_phase(
 
 
 def _ingest_live(td: date) -> list[dict[str, Any]]:
-    """Fans out the JSON feeds; a feed that gives up after its budget lands a FAILED manifest."""
     futures = {name: ingest_feed.submit(name, td) for name in EOD_FEEDS}
     manifests: list[dict[str, Any]] = []
     for name, future in futures.items():
@@ -111,7 +105,6 @@ def _ingest_live(td: date) -> list[dict[str, Any]]:
 
 
 def _ingest_result(td: date, config: OrchestrationConfig) -> PhaseResult:
-    """Runs ingest (live fan-out or fixture replay) and reports the aggregate manifest status."""
     if config.ingest_mode == "fixture":
         manifests = load_fixtures_bronze(_fixture_roots())
     else:
@@ -130,7 +123,6 @@ def _ingest_result(td: date, config: OrchestrationConfig) -> PhaseResult:
 
 
 def _degrade_on_trigger_failure(exc: Exception) -> PhaseResult | None:
-    """A known trigger failure degrades that step alone; an unexpected error is a real FAILED."""
     if isinstance(exc, (TriggerTransientError, TriggerPermanentError)):
         return PhaseResult(status="DEGRADED", notes=f"agentic trigger failed: {exc}")
     return None
@@ -141,11 +133,9 @@ def _rollup(*statuses: str) -> str:
     return max(statuses, key=lambda s: _SEVERITY.get(s, 0))
 
 
-# OR-03 max_workers=2 bounds worker task parallelism, distinct from DuckDB threads:4
 _TASK_RUNNER: ThreadPoolTaskRunner[Any] = ThreadPoolTaskRunner(max_workers=2)
 
 
-# Prefect's ThreadPoolTaskRunner generic does not unify with FlowDecorator's expected type
 @flow(name="gloomberg_daily_flow", task_runner=_TASK_RUNNER)  # type: ignore[arg-type]
 def gloomberg_daily_flow(trade_date: str | None = None, objective: str | None = None) -> str:
     """Runs the calendar-aware daily cycle for one WIB trade_date; returns the run status."""

@@ -1,11 +1,7 @@
-# OR-05 deployment: the daily flow on the local work pool, WIB-aligned schedule.
-# Portable by design — the same file deploys against a local Prefect server or Prefect
-# Cloud; only PREFECT_API_URL / PREFECT_API_KEY change (see scripts/setup_prefect.py).
-
 name: gloomberg-orchestration
 prefect-version: 3.7.7
 
-# local process worker runs from this service dir; on a VPS, run the worker here too
+# local process worker runs from this service dir, on a VPS, run the worker here too
 pull:
   - prefect.deployments.steps.set_working_directory:
       directory: "{{ $GLOOMBERG_ORCH_DIR }}"
@@ -15,9 +11,9 @@ deployments:
     entrypoint: src/orchestration/flow.py:gloomberg_daily_flow
     description: "The OR-01 daily medallion cycle (guard -> ingest -> gate -> dbt -> promote -> trigger)."
     work_pool:
-      name: gloomberg-local        # OR-03 work pool; concurrency limits set by setup_prefect.py
+      name: gloomberg-local        # concurrency limits set by setup_prefect.py
     schedules:
-      - cron: "0 17 * * 1-5"        # WIB EOD buffer past the close (OR-07); guard skips holidays
+      - cron: "0 17 * * 1-5"        # WIB EOD buffer past the close, guard skips holidays
         timezone: "Asia/Jakarta"
     parameters:
       objective: "daily_sentiment"

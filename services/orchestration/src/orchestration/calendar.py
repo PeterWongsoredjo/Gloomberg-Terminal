@@ -1,8 +1,6 @@
-"""CT-005 trading-day resolver: is the market open on a given WIB date?
-
-Holidays and working-Saturday exceptions are effective-dated config in the calendar seed,
-never hardcoded constants (ADR-006). The weekend is the only structural rule; everything
-else is an explicit override row in ref_market_calendar.csv.
+"""
+Holidays and working-Saturday are exceptions in the orchestration
+this file dictates that our prefect only runs on days where ihsg is open
 """
 
 from __future__ import annotations
@@ -14,8 +12,6 @@ from typing import NamedTuple
 
 
 class _Override(NamedTuple):
-    """One effective-dated calendar exception row."""
-
     is_trading: bool
     reason: str
 
@@ -34,7 +30,6 @@ def _load_overrides(calendar_seed: Path) -> dict[date, _Override]:
 
 
 def is_trading_day(day: date, calendar_seed: Path) -> bool:
-    """True when the market trades: a weekday, unless an override row says otherwise."""
     override = _load_overrides(calendar_seed).get(day)
     if override is not None:
         return override.is_trading
@@ -42,7 +37,6 @@ def is_trading_day(day: date, calendar_seed: Path) -> bool:
 
 
 def holiday_reason(day: date, calendar_seed: Path) -> str:
-    """Human-readable reason a non-trading day is closed, for the skip log."""
     if day.weekday() >= 5:
         return "weekend"
     override = _load_overrides(calendar_seed).get(day)
