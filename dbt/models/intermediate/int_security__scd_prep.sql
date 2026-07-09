@@ -24,8 +24,7 @@ ksei as (
 )
 
 select
-    -- identity is keyed on the stable ISIN so a ticker rename versions the same
-    -- security; tickers without an ISIN yet fall back to a namespaced ticker key
+    -- tickers without an ISIN yet fall back to a namespaced ticker key
     (hash(coalesce(k.isin, 'ticker:' || p.ticker)) >> 1)::bigint as security_id,
     p.ticker,
     k.isin,

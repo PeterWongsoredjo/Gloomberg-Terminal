@@ -1,8 +1,6 @@
 gloomberg:
   target: analytical
   outputs:
-    # DuckDB build target — dbt's sole writer (ADR-001). Promotion to the
-    # published snapshot backend-api reads is a Stage 1 mechanic.
     analytical:
       type: duckdb
       # relative to the dbt project dir: correct on this box and portable to the VPS
