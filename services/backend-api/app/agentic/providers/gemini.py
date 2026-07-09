@@ -1,9 +1,5 @@
-"""Gemini adapter (2.5 Flash-Lite): true structured outputs via response_schema.
-
-Passing the AG-02 Pydantic class as response_schema constrains generation so keys and types
-conform by construction, the strongest guarantee we have; the same AG-02 validator still runs
-after, so a ladder cross-substitution from Groq carries no schema risk. The client is built
-once in the lifespan and injected.
+"""
+Gemini adapter (2.5 Flash-Lite)
 """
 
 from __future__ import annotations
@@ -24,8 +20,6 @@ from app.agentic.providers.base import (
 
 
 class GeminiProvider:
-    """Wraps an injected google-genai client behind the normalized AG-05 interface."""
-
     name = "gemini"
 
     def __init__(self, client: genai.Client, model: str) -> None:
@@ -33,7 +27,6 @@ class GeminiProvider:
         self._model = model
 
     async def complete(self, request: ProviderRequest) -> ProviderResponse:
-        """Runs one schema-constrained completion and normalizes the result or a typed fault."""
         started = time.monotonic()
         config = types.GenerateContentConfig(
             system_instruction=request.system,

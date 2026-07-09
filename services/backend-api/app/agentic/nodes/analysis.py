@@ -1,9 +1,8 @@
-"""The three analysis nodes and their shared inference engine.
-
-Each node builds provider-agnostic requests from the assembled context, runs them down the
-degradation ladder, and validates every response against its AG-02 schema. A response that
-does not parse or validate becomes an invalid draft the evaluator will send back for
-self-correction; a total provider outage falls to Tier-2 cache, then Tier-3 degrade.
+"""
+Runs the analysis on news, including:
+1. Sentiment analysis
+2. Deep extraction
+3. Synthesize insight
 """
 
 from __future__ import annotations
@@ -24,7 +23,6 @@ from app.agentic.state import AgentState, budget_delta
 
 
 def _tasks(state: AgentState, prompt: PromptTemplate) -> list[dict[str, Any]]:
-    """Builds one inference task per subject for the run's objective."""
     objective = state["objective"]
     context = state["context"]
     correction = (state["working"].get("evaluation") or {}).get("reasons", [])
@@ -87,7 +85,6 @@ async def _infer(
 
 
 async def _tier2_cache(deps: Any, state: AgentState) -> list[dict[str, Any]] | None:
-    """Serves the last-known artifacts within the staleness budget, stamped STALE."""
     if deps.pg_pool is None:
         return None
     hit = await cache.get(deps.pg_pool, state["working"]["cache_key"])
@@ -103,7 +100,6 @@ async def _tier2_cache(deps: Any, state: AgentState) -> list[dict[str, Any]] | N
 
 
 async def run_analysis(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Produces draft artifacts for every subject, or degrades on a total outage."""
     deps = get_deps(config)
     objective = state["objective"]
     prompt = get_prompt(objective)
@@ -150,7 +146,6 @@ async def run_analysis(state: AgentState, config: RunnableConfig) -> dict[str, A
 
 
 async def sentiment_analyze(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Scores news-flow tone per instrument (Groq primary)."""
     return await run_analysis(state, config)
 
 
@@ -160,12 +155,10 @@ async def deep_extract(state: AgentState, config: RunnableConfig) -> dict[str, A
 
 
 async def synthesize_insight(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Fuses signals into a descriptive Insight narrative."""
     return await run_analysis(state, config)
 
 
 def after_analysis(state: AgentState) -> str:
-    """Routes to evaluate when there are drafts to grade, else straight to finalize."""
     if state.get("abort_reason"):
         return "finalize"
     if not state["working"]["draft_artifacts"]:

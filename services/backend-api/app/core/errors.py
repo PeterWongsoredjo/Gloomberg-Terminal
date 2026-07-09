@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 
 class Problem(BaseModel):
-    """RFC 9457 problem+json shape (SV-07), never carries stack traces, SQL, or paths."""
+    """RFC 9457 problem+json shape, never carries stack traces, SQL, or paths."""
 
     type: str = "about:blank"
     title: str

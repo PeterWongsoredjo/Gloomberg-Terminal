@@ -1,8 +1,5 @@
-"""Client-side token bucket that paces requests under the seeded RPM ceiling.
-
-We pre-empt the provider's 429 rather than treating it as flow control: a request waits for a
-slot instead of firing and getting rejected. The clock and sleep are injectable so tests can
-drive pacing deterministically without real time passing.
+"""
+Client-side token bucket that paces requests under the seeded RPM ceiling.
 """
 
 from __future__ import annotations
@@ -13,8 +10,6 @@ from collections.abc import Awaitable, Callable
 
 
 class RatePacer:
-    """A refilling token bucket sized to a per-minute request ceiling."""
-
     def __init__(
         self,
         rpm: int,

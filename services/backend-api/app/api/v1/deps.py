@@ -1,8 +1,5 @@
-"""Shared request dependencies: the operator auth stub and the lifespan resource accessor.
-
-These are the first real readers of the lifespan seam. The auth check is a single-operator stub
-(SV-10): a static token when one is configured, loopback-trust otherwise. Nothing here builds a
-resource; it only hands endpoints what the lifespan already built once.
+"""
+Authentication and dependency injection for FastAPI endpoints.
 """
 
 from __future__ import annotations

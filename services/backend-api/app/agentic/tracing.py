@@ -1,8 +1,5 @@
-"""The tracing seam every node reports through, so a real backend can plug in later.
-
-Each node opens a span; the default sink does nothing. Stage 4 swaps in a Langfuse-backed
-tracer implementing the same interface, so wiring real observability is an injection, not a
-rewrite of the nodes.
+"""
+Tracing out a node will use Langfuse to observe how each node acts
 """
 
 from __future__ import annotations
@@ -23,14 +20,10 @@ class Span(Protocol):
 
 
 class Tracer(Protocol):
-    """Opens spans under a run; the interface a Langfuse tracer will implement."""
-
     def span(self, name: str, run_id: str, inputs: dict[str, Any] | None = None) -> Any: ...
 
 
 class _NoopSpan:
-    """A span that records nothing; the default when no tracer is wired."""
-
     def set_output(self, output: Any) -> None:
         return None
 
@@ -42,8 +35,6 @@ class _NoopSpan:
 
 
 class NoopTracer:
-    """The default tracer: spans open and close but capture nothing."""
-
     @asynccontextmanager
     async def span(
         self, name: str, run_id: str, inputs: dict[str, Any] | None = None

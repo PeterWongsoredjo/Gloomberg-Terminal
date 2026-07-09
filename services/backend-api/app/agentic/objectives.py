@@ -1,8 +1,5 @@
-"""One registry of everything that varies by analytical objective.
-
-Each objective maps to its artifact type, output schema, provider order, graph node, and
-confidence gate. Keeping it in one table means adding an objective is a single edit, not seven
-parallel dicts that can drift out of sync.
+"""
+Mapping of the task used in the lifecycle, we'll ladder this to the Agent
 """
 
 from __future__ import annotations
@@ -16,8 +13,6 @@ from app.agentic.schemas import ArtifactType, ExtractionValue, InsightValue, Sen
 
 @dataclass(frozen=True)
 class ObjectiveSpec:
-    """All the per-objective knowledge the graph needs, in one place."""
-
     objective: str
     artifact_type: ArtifactType
     value_model: type[BaseModel]
@@ -42,10 +37,8 @@ _BY_TYPE: dict[str, ObjectiveSpec] = {spec.artifact_type: spec for spec in OBJEC
 
 
 def spec_for(objective: str) -> ObjectiveSpec:
-    """The spec for an objective."""
     return OBJECTIVES[objective]
 
 
 def spec_for_type(artifact_type: str) -> ObjectiveSpec:
-    """The spec for an artifact type, for the finalize reverse lookup."""
     return _BY_TYPE[artifact_type]

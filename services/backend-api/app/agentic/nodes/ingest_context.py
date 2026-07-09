@@ -1,8 +1,5 @@
-"""ingest_context: assemble news, market context, and corporate actions for the window.
-
-The subject universe is validated against dim_security here, so a code that is not a current
-IDX security never reaches an analysis node. Independent Gold reads run concurrently, and the
-AG-08 cache key is computed once here since every input it hashes is now known.
+"""
+ingest_context: assemble news, market context, and corporate actions for the window.
 """
 
 from __future__ import annotations
@@ -21,7 +18,6 @@ from app.agentic.warehouse import GoldReader
 
 
 async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Builds the shared context and prunes the universe to known securities."""
     deps = get_deps(config)
     gold = GoldReader(deps.duckdb_ro)
     objective = state["objective"]

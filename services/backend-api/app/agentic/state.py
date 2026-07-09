@@ -1,7 +1,5 @@
-"""AG-01 LangGraph shared state: the CT-010 envelope plus node-level working fields.
-
-Accumulator channels carry reducers so parallel or looped supersteps combine instead of
-clobbering: artifacts append, token and iteration counters add. Everything else replaces.
+"""
+Defines the schema and type definitions for the LangGraph state.
 """
 
 from __future__ import annotations
@@ -14,8 +12,6 @@ RunStatus = Literal["RUNNING", "SUCCEEDED", "DEGRADED", "ABORTED"]
 
 
 class Budget(TypedDict):
-    """CT-010 hard caps and running consumption; the runaway guard (ADR-002)."""
-
     max_loop_iterations: int
     max_total_tokens: int
     consumed_tokens: int
@@ -23,7 +19,6 @@ class Budget(TypedDict):
 
 
 def merge_budget(current: Budget, update: Budget) -> Budget:
-    """Keeps the caps and adds the consumed deltas; the empty first write seeds the caps."""
     if not current:
         return update
     return {
@@ -43,17 +38,17 @@ class Context(TypedDict):
 
 
 class Working(TypedDict):
-    """Per-iteration scratch; replaced each superstep, never accumulated."""
+    """Per-iteration scratch, replaced each superstep, never accumulated."""
 
     draft_artifacts: list[dict[str, Any]]
     evaluation: dict[str, Any] | None
     active_provider: str
     prompt_version: str
-    cache_key: str  # AG-08 key, computed once in ingest_context and reused
+    cache_key: str 
 
 
 class AgentState(TypedDict, total=False):
-    """The full graph state persisted at each superstep boundary (CT-010 / AG-01)."""
+    """The full graph state persisted at each superstep boundary."""
 
     run_id: str
     objective: Objective
