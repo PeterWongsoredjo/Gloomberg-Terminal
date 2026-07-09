@@ -1,9 +1,5 @@
-"""Normalizes raw RSS news into the JSON news items the sentiment flow reads.
-
-Stage 2 lands each feed's raw RSS verbatim under news_rss/{dataset}. This turns those XML
-payloads into one clean, deduplicated item list under news_rss/items, the shape dbt's
-stg_news_rss and the agent's context both expect. Candidate tickers are extracted here; the
-agent's resolver is the authority on which are real.
+"""
+Normalizes raw RSS news into the JSON news items the sentiment flow reads.
 """
 
 from __future__ import annotations
@@ -29,7 +25,6 @@ _NOT_TICKER = {"IHSG", "LQ45", "RUPS", "IPGF", "HMETD"}
 
 
 def _text(item: ElementTree.Element, tag: str) -> str:
-    """Text of the first matching child tag, namespace-insensitive, or empty."""
     for child in item:
         if child.tag.rsplit("}", 1)[-1] == tag and child.text:
             return child.text.strip()
@@ -37,7 +32,6 @@ def _text(item: ElementTree.Element, tag: str) -> str:
 
 
 def _published_at(raw: str) -> str:
-    """Parses an RFC-822 pubDate to a UTC ISO instant, or now on failure."""
     try:
         parsed = parsedate_to_datetime(raw)
     except (TypeError, ValueError):
@@ -48,7 +42,6 @@ def _published_at(raw: str) -> str:
 
 
 def _candidate_tickers(*texts: str) -> list[str]:
-    """Extracts 4-letter uppercase candidate codes, minus the known non-tickers."""
     found = {t for text in texts for t in _TICKER.findall(text)} - _NOT_TICKER
     return sorted(found)
 
@@ -83,7 +76,6 @@ def parse_rss(xml: bytes, source_dataset: str) -> list[dict[str, Any]]:
 
 
 def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
-    """Reads every raw news payload landed for the trade_date, with its dataset."""
     decompressor = zstandard.ZstdDecompressor()
     prefix = "news_rss/"
     out = []
@@ -125,7 +117,6 @@ def normalize_from_bronze(minio: Minio, trade_date: date, settings: Settings) ->
 
 
 def main() -> None:
-    """CLI: normalize a trade_date's raw news into news_rss/items."""
     import sys
 
     settings = get_settings()

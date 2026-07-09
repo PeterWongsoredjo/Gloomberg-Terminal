@@ -1,8 +1,5 @@
-"""Lands payloads into MinIO Bronze under CT-002 paths with CT-003 manifests.
-
-The land primitive is shared by the live daily ingest (the conductor calls it per feed) and
-the fixture loader, so both write Bronze the exact same way. A live fetch uses a ULID run id;
-a total fetch failure still emits a FAILED manifest so no partial Bronze is ever promoted.
+"""
+Connects to the internet, fetches data, and lands it in the MinIO Bronze layer 
 """
 
 from __future__ import annotations
@@ -24,7 +21,7 @@ from pipeline.config import BRONZE_BUCKET, Settings
 
 
 class FetchError(RuntimeError):
-    """Upstream fetch failed; status_code is None for a connect/read timeout."""
+    """Upstream fetch failed, status_code is None for a connect/read timeout."""
 
     def __init__(self, status_code: int | None, message: str) -> None:
         self.status_code = status_code
@@ -32,7 +29,6 @@ class FetchError(RuntimeError):
 
 
 def client(settings: Settings) -> Minio:
-    """MinIO S3 client against the host-mapped gateway."""
     return Minio(
         settings.minio_endpoint,
         access_key=settings.minio_key,
@@ -42,7 +38,6 @@ def client(settings: Settings) -> Minio:
 
 
 def _put(minio: Minio, key: str, data: bytes, content_type: str) -> None:
-    """Uploads one immutable object to the Bronze bucket."""
     minio.put_object(
         BRONZE_BUCKET, key, io.BytesIO(data), length=len(data), content_type=content_type
     )
@@ -61,7 +56,6 @@ def fetch(url: str) -> bytes:
 
 
 def record_count(raw: bytes, ext: str) -> int:
-    """Best-effort record count for the manifest, per payload shape."""
     if ext == "xml":
         return raw.count(b"<item")
     parsed: Any = json.loads(raw)
@@ -89,7 +83,6 @@ def land_payloads(
     requested_at: datetime,
     ext: str = "json",
 ) -> dict[str, Any]:
-    """Compresses each payload into Bronze and writes the one CT-003 manifest."""
     compressor = zstandard.ZstdCompressor()
     for seq, raw in enumerate(payloads):
         key = paths.object_key(source, dataset, trade_date, source_version, ingest_run_id, seq, ext)
@@ -113,7 +106,7 @@ def land_payloads(
 
 
 def fetch_and_land(minio: Minio, spec: FeedSpec, trade_date: date) -> dict[str, Any]:
-    """Fetches one live feed and lands it in Bronze; raises FetchError on upstream failure."""
+    """Fetches one live feed and lands it in Bronze, raises FetchError on upstream failure."""
     url = spec.url.format(ymd=trade_date.strftime("%Y%m%d")) if spec.date_scoped else spec.url
     raw = fetch(url)
     count = record_count(raw, spec.ext)
@@ -134,7 +127,6 @@ def fetch_and_land(minio: Minio, spec: FeedSpec, trade_date: date) -> dict[str, 
 
 
 def emit_failed_manifest(minio: Minio, spec: FeedSpec, trade_date: date, reason: str) -> dict[str, Any]:
-    """Writes a CT-003 FAILED manifest with no Bronze object, per OR-02 on_final_failure."""
     manifest = build_manifest(
         ingest_run_id=str(ULID()),
         source=spec.source,

@@ -1,8 +1,5 @@
-"""Publishes the built Gold to the read-only snapshot the serving layer opens.
-
-dbt writes the build database; this copies only the materialized Gold tables (dim/fct/agg)
-into a fresh, view-free snapshot and swaps it into place atomically. Serving never sees a
-half-built Gold because the swap is a single os.replace onto the published path (ADR-001).
+"""
+Publishes the built Gold to the read-only snapshot the serving layer opens.
 """
 
 from __future__ import annotations
@@ -48,12 +45,11 @@ def publish(settings: Settings) -> list[str]:
     finally:
         con.close()
 
-    os.replace(tmp, dst)  # atomic on the same volume; readers see whole-old or whole-new
+    os.replace(tmp, dst)  # atomic on the same volume, readers see whole-old or whole-new
     return tables
 
 
 def main() -> None:
-    """CLI: publish the current build to the serving snapshot."""
     settings = get_settings()
     published = publish(settings)
     print(f"published {len(published)} Gold tables -> {Path(settings.published_gold)}")

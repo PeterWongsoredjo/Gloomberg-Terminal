@@ -1,7 +1,5 @@
-"""The one registry of upstream Bronze feeds, shared by fixture capture and live ingest.
-
-Endpoints are live-verified and documented in `docs/SETUP.md`. Keeping the specs in a
-single place means capture (fixtures) and ingest (live to MinIO) never drift apart.
+"""
+The one registry of upstream Bronze feeds, shared by fixture capture and live ingest.
 """
 
 from __future__ import annotations
@@ -20,9 +18,7 @@ class FeedSpec:
     url: str
     source_version: str = "v1"
     ext: str = "json"
-    # true when the payload is the full listed universe, so coverage/missing apply
     is_universe: bool = False
-    # {ymd} in the url is filled with the trade_date as YYYYMMDD; others are snapshots
     date_scoped: bool = False
 
 
