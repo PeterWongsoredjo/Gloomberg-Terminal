@@ -1,9 +1,5 @@
-"""SV-09 scheduled-run seam: launch an agentic run off the request loop and poll its status.
-
-The orchestrator (OR-04) POSTs a run and polls it; this never runs a model inline in the request.
-POST returns 202 with a run_id immediately and dispatches the graph as a background task; GET reads
-the run's ledger row. A repeat POST for an in-flight objective:trade_date is an idempotent 409.
-Run-status envelope freshness is a placeholder until the serving stage wires the SLO engine.
+"""
+Launches the agentic job off the main request loop
 """
 
 from __future__ import annotations
@@ -30,7 +26,7 @@ router = APIRouter()
 
 
 class RunRequest(BaseModel):
-    """The OR-04 trigger body: what run to launch, over which universe."""
+    """trigger body: what run to launch, over which universe."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -71,6 +67,7 @@ async def _run_and_cleanup(app_state: AppState, idem_key: str, run_id: str, body
             trade_date=body.trade_date,
             universe=body.subject_universe,
             run_id=run_id,
+            tracer=app_state.langfuse_handler,
         )
     except Exception:
         logger.exception("agentic run %s failed", run_id)
@@ -119,7 +116,7 @@ async def get_run_status(
     app_state: AppState = Depends(require_agentic),
     _: None = Depends(require_operator),
 ) -> Envelope[RunStatusData]:
-    """Returns the run's CT-011-wrapped status for the OR-04 poller."""
+    """Returns the run's status."""
     deps = app_state.agentic_deps
     assert deps is not None
     if deps.pg_pool is None:

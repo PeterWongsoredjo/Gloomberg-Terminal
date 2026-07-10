@@ -1,8 +1,5 @@
-"""AG-03 prompt registry: versioned, content-hashed templates loaded from YAML.
-
-Prompts are artifacts, not inline strings. Each carries a version and a content hash that gets
-stamped into CT-009 provenance and the trace, so any artifact is reproducible against the exact
-prompt that produced it. One template per objective is registered as that objective's default.
+"""
+registrey sets up the persona and hard rules fro the LLM using the templates
 """
 
 from __future__ import annotations
@@ -63,3 +60,8 @@ def get_prompt(objective: str) -> PromptTemplate:
     if objective not in registry:
         raise KeyError(f"no registered prompt for objective {objective!r}")
     return registry[objective]
+
+
+def registered_templates() -> list[PromptTemplate]:
+    """Every registered prompt template, for hash reconciliation against Langfuse (OB-03)."""
+    return list(_by_objective().values())
