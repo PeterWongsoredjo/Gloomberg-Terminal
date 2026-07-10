@@ -1,8 +1,10 @@
-"""AG-07 operational ledger: our own clean, queryable tables for runs and artifacts.
+"""ledger just logs stuff the LLM agent does and saves to a DB:
 
-These sit alongside the framework's PostgresSaver checkpoint tables in the same database, but
-they are the only surface dbt and FastAPI read. finalize writes durable artifacts here; the 02
-pipeline projects agent_artifact into fct_sentiment. We never write the checkpoint tables.
+four main tables are:
+1. agent_run: keeps track of the agent runs (status, total tokens, etc.)
+2. agent_artifact: stores actual outputs generated (sentiment score, etc.)
+3. provider_health: keeps track of the provider health (breaker state, rate limits, etc.)
+4. artifact_cache: caches outputs
 """
 
 from __future__ import annotations
@@ -53,8 +55,11 @@ create table if not exists agentic.provider_health (
     breaker_state text not null,
     consecutive_failures int not null default 0,
     rpd_consumed int not null default 0,
+    tpd_consumed bigint not null default 0,
     updated_at timestamptz not null default now()
 );
+
+alter table agentic.provider_health add column if not exists tpd_consumed bigint not null default 0;
 
 create table if not exists agentic.artifact_cache (
     cache_key text primary key,
@@ -65,19 +70,18 @@ create table if not exists agentic.artifact_cache (
 
 
 async def setup(pool: asyncpg.Pool) -> None:
-    """Creates the operational ledger tables; idempotent, run once at startup."""
     await pool.execute(_DDL)
 
 
 async def start_run(
     pool: asyncpg.Pool, *, run_id: str, objective: str, trade_date: date, trace_id: str | None
 ) -> None:
-    """Records a run as RUNNING, or leaves an existing row untouched (idempotent trigger)."""
     await pool.execute(
         """
         insert into agentic.agent_run (run_id, objective, trade_date, status, started_at, trace_id)
         values ($1, $2, $3, 'RUNNING', now(), $4)
-        on conflict (run_id) do nothing
+        on conflict (run_id) do update
+            set trace_id = coalesce(excluded.trace_id, agentic.agent_run.trace_id)
         """,
         run_id,
         objective,
@@ -95,7 +99,6 @@ async def finish_run(
     consumed_tokens: int,
     consumed_iterations: int,
 ) -> None:
-    """Stamps a run's terminal status and consumption atomically at finalize."""
     await pool.execute(
         """
         update agentic.agent_run
@@ -112,7 +115,6 @@ async def finish_run(
 
 
 async def read_run(pool: asyncpg.Pool, run_id: str) -> asyncpg.Record | None:
-    """Reads one run's status row for the serving poll endpoint, or None if absent."""
     return await pool.fetchrow(
         """
         select run_id, objective, trade_date, status, abort_reason,
@@ -125,7 +127,6 @@ async def read_run(pool: asyncpg.Pool, run_id: str) -> asyncpg.Record | None:
 
 
 async def write_artifact(pool: asyncpg.Pool, run_id: str, artifact: Ct009Artifact) -> None:
-    """Persists one CT-009 artifact as the durable, queryable ledger record."""
     await pool.execute(
         """
         insert into agentic.agent_artifact (
@@ -155,22 +156,35 @@ async def write_artifact(pool: asyncpg.Pool, run_id: str, artifact: Ct009Artifac
 
 
 async def record_provider_health(
-    pool: asyncpg.Pool, *, provider: str, breaker_state: str, consecutive_failures: int, rpd_consumed: int
+    pool: asyncpg.Pool,
+    *,
+    provider: str,
+    breaker_state: str,
+    consecutive_failures: int,
+    rpd_consumed: int,
+    tpd_consumed: int,
 ) -> None:
-    """Upserts a provider's breaker state and daily request consumption."""
     await pool.execute(
         """
         insert into agentic.provider_health
-            (provider, breaker_state, consecutive_failures, rpd_consumed, updated_at)
-        values ($1, $2, $3, $4, now())
+            (provider, breaker_state, consecutive_failures, rpd_consumed, tpd_consumed, updated_at)
+        values ($1, $2, $3, $4, $5, now())
         on conflict (provider) do update set
             breaker_state = excluded.breaker_state,
             consecutive_failures = excluded.consecutive_failures,
             rpd_consumed = excluded.rpd_consumed,
+            tpd_consumed = excluded.tpd_consumed,
             updated_at = now()
         """,
         provider,
         breaker_state,
         consecutive_failures,
         rpd_consumed,
+        tpd_consumed,
     )
+
+
+async def read_provider_consumption(pool: asyncpg.Pool) -> dict[str, tuple[int, int]]:
+    """Today's stored (requests, tokens) per provider, to reseed the quota tracker on boot."""
+    rows = await pool.fetch("select provider, rpd_consumed, tpd_consumed from agentic.provider_health")
+    return {str(r["provider"]): (int(r["rpd_consumed"]), int(r["tpd_consumed"])) for r in rows}
