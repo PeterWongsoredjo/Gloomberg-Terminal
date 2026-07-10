@@ -21,6 +21,9 @@ dbt/.user.yml
 # DuckDB Gold snapshot (published pointer, not source)
 services/backend-api/warehouse/*.duckdb
 
+# MLflow offline-eval store (local file backend, rebuildable history)
+services/backend-api/mlruns/
+
 # env files (never commit secrets)
 .env
 .env.*
@@ -29,3 +32,6 @@ services/backend-api/warehouse/*.duckdb
 # OS / editor
 .DS_Store
 Thumbs.db
+
+docs/
+*.md
