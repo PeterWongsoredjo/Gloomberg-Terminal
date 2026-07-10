@@ -1,0 +1,63 @@
+- alert_id: coverage_below_floor
+  source: "slo:coverage_floor"
+  severity: ERROR
+  dedup_key: "coverage:{trade_date}:{dataset}"
+  cooldown_minutes: 60
+  route: [telemetry_panel, operator_log]
+  payload_includes: [missing_tickers, coverage_ratio, ingest_run_id]
+- alert_id: eod_freshness_stale
+  source: "slo:freshness_eod_daily_trade"
+  severity: WARN
+  dedup_key: "freshness:{trade_date}:{dataset}"
+  cooldown_minutes: 60
+  route: [telemetry_panel, operator_log]
+  payload_includes: [dataset, data_as_of]
+- alert_id: foreign_flow_freshness_stale
+  source: "slo:freshness_foreign_flow"
+  severity: WARN
+  dedup_key: "freshness:{trade_date}:{dataset}"
+  cooldown_minutes: 60
+  route: [telemetry_panel, operator_log]
+  payload_includes: [dataset, data_as_of]
+- alert_id: gold_promotion_failed
+  source: "slo:gold_promotion"
+  severity: ERROR
+  dedup_key: "promotion:{trade_date}"
+  cooldown_minutes: 60
+  route: [telemetry_panel, operator_log]
+  payload_includes: [trade_date]
+- alert_id: agentic_run_slow
+  source: "slo:agentic_run_latency"
+  severity: WARN
+  dedup_key: "latency:{run_id}"
+  cooldown_minutes: 30
+  route: [telemetry_panel]
+  payload_includes: [run_id, run_latency_ms]
+- alert_id: token_budget_exhausted
+  source: "slo:token_budget_run"
+  severity: CRITICAL
+  dedup_key: "budget:{run_id}"
+  cooldown_minutes: 60
+  route: [telemetry_panel, operator_log]
+  payload_includes: [run_id, consumed_tokens]
+- alert_id: provider_quota_high
+  source: "slo:provider_quota"
+  severity: WARN
+  dedup_key: "quota:{trade_date}:{provider}"
+  cooldown_minutes: 60
+  route: [telemetry_panel]
+  payload_includes: [provider, quota_pct]
+- alert_id: provider_breaker_open
+  source: "event:breaker_open"
+  severity: WARN
+  dedup_key: "breaker:{provider}"
+  cooldown_minutes: 30
+  route: [telemetry_panel]
+  payload_includes: [provider]
+- alert_id: observability_heartbeat_dead
+  source: "event:heartbeat_dead"
+  severity: CRITICAL
+  dedup_key: "heartbeat:{source}"
+  cooldown_minutes: 15
+  route: [telemetry_panel, operator_log]
+  payload_includes: [source, silent_seconds]
