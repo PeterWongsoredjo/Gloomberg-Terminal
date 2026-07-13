@@ -1,0 +1,33 @@
+timezone_offset_hours: 7
+templates:
+  NORMAL:
+    close_time: "16:00"
+    eod_freshness_minutes: 90
+    phases:
+      - ["08:45", "09:00", "PRE_OPENING"]
+      - ["09:00", "12:00", "SESSION_1"]
+      - ["12:00", "13:30", "SESSION_BREAK"]
+      - ["13:30", "15:50", "SESSION_2"]
+      - ["15:50", "16:00", "PRE_CLOSING"]
+      - ["16:00", "16:15", "RANDOM_CLOSING"]
+      - ["16:15", "16:30", "POST_TRADING"]
+  HALF_DAY:
+    close_time: "11:30"
+    eod_freshness_minutes: 90
+    phases:
+      - ["08:45", "09:00", "PRE_OPENING"]
+      - ["09:00", "11:30", "SESSION_1"]
+      - ["11:30", "12:00", "PRE_CLOSING"]
+      - ["12:00", "12:15", "RANDOM_CLOSING"]
+      - ["12:15", "12:30", "POST_TRADING"]
+  RAMADAN:
+    close_time: "15:00"
+    eod_freshness_minutes: 90
+    phases:
+      - ["08:45", "09:00", "PRE_OPENING"]
+      - ["09:00", "11:30", "SESSION_1"]
+      - ["11:30", "13:30", "SESSION_BREAK"]
+      - ["13:30", "15:00", "SESSION_2"]
+      - ["15:00", "15:10", "PRE_CLOSING"]
+      - ["15:10", "15:25", "RANDOM_CLOSING"]
+      - ["15:25", "15:40", "POST_TRADING"]

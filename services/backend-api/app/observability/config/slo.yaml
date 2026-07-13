@@ -1,0 +1,44 @@
+- slo_id: freshness_eod_daily_trade
+  plane: PIPELINE
+  measure: data_as_of_age
+  applies_when: { dataset: "idx_summary.daily_trade" }
+  target: { max_age_after_close_minutes: 90 }
+  calendar_aware: true
+  severity: WARN
+- slo_id: freshness_foreign_flow
+  plane: PIPELINE
+  measure: data_as_of_age
+  applies_when: { dataset: "idx_summary.flow_foreign" }
+  target: { max_age_after_close_minutes: 120 }
+  calendar_aware: true
+  severity: WARN
+- slo_id: coverage_floor
+  plane: PIPELINE
+  measure: coverage_ratio
+  target: { min: 0.95 }
+  calendar_aware: true
+  severity: ERROR
+- slo_id: gold_promotion
+  plane: PIPELINE
+  measure: gold_promotion_ok
+  target: { equals: true }
+  calendar_aware: true
+  severity: ERROR
+- slo_id: agentic_run_latency
+  plane: LLM
+  measure: run_latency_ms
+  target: { p95_ms: 120000 }
+  calendar_aware: false
+  severity: WARN
+- slo_id: token_budget_run
+  plane: LLM
+  measure: consumed_tokens
+  target: { max: 60000 }
+  calendar_aware: false
+  severity: CRITICAL
+- slo_id: provider_quota
+  plane: LLM
+  measure: quota_pct
+  target: { max: 1.0 }
+  calendar_aware: false
+  severity: WARN

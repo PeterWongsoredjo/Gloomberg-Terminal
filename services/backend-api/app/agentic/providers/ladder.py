@@ -1,9 +1,7 @@
-"""The degradation ladder's live tiers: try the primary, cross-substitute on failure.
-
-This owns Tier 0 (primary) and Tier 1 (cross-substitute) from 04 3.3. Each attempt is paced
-under the RPM ceiling and guarded by the provider's breaker; a rate-limit or outage moves to
-the next provider in the ladder. When every live provider is down it raises AllProvidersDown,
-and the calling node takes Tier 2 (cache) then Tier 3 (degrade-visible).
+"""
+Ladder serves the connection, splits our gemini and Groq to tier 0 and 1
+Primary will be tier 0, means the agent will be used for that task first,
+if fails then switch to the tier 1 agent
 """
 
 from __future__ import annotations
@@ -15,6 +13,7 @@ from app.agentic.providers.base import (
     ProviderResponse,
     ProviderSlot,
     ProviderUnavailable,
+    QuotaGuard,
 )
 
 
@@ -23,26 +22,25 @@ class AllProvidersDown(ProviderUnavailable):
 
 
 class ProviderLadder:
-    """Walks ordered provider slots, substituting past rate limits and outages."""
-
-    def __init__(self, slots: list[ProviderSlot]) -> None:
+    def __init__(self, slots: list[ProviderSlot], quota: QuotaGuard | None = None) -> None:
         self._slots = slots
+        self._quota = quota
 
     @property
     def is_empty(self) -> bool:
-        """True when no provider is wired into this ladder."""
         return not self._slots
 
     @property
     def primary_name(self) -> str:
-        """The name of the first provider in the ladder, or 'none' when empty."""
         return self._slots[0].provider.name if self._slots else "none"
 
     async def complete(self, request: ProviderRequest) -> ProviderResponse:
-        """Returns the first live provider's response, substituting past transient faults."""
         attempted = False
         for slot in self._slots:
+            name = slot.provider.name
             if not slot.breaker.allow():
+                continue
+            if self._quota is not None and self._quota.exhausted(name):
                 continue
             attempted = True
             await slot.pacer.acquire()
@@ -55,5 +53,7 @@ class ProviderLadder:
                 slot.breaker.record_failure()
                 raise
             slot.breaker.record_success()
+            if self._quota is not None:
+                self._quota.record(name, requests=1, tokens=response.prompt_tokens + response.completion_tokens)
             return response
-        raise AllProvidersDown("no live provider available" if attempted else "all breakers open")
+        raise AllProvidersDown("no live provider available" if attempted else "all breakers open or quota-exhausted")

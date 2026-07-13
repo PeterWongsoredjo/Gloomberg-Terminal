@@ -1,8 +1,7 @@
-"""Builds the agentic clients, provider slots, and dependency bundle once at startup.
-
-Kept separate from the FastAPI lifespan so the same wiring backs both the running app and the
-live smoke harness. Every client here is process-scoped and injected into the graph; nothing in
-a node ever constructs one.
+"""Bootstrapping here means:
+1. Preparing the dependencies Bundle (deps.py)
+2. Initializing LLM Clients (Gemini, Groq)
+3. wrapping each in a circuit breaker, rate pacer, quota guard, based in (limits.py)
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from groq import AsyncGroq
 
 from app.agentic.config import AgenticSettings
 from app.agentic.deps import GraphDeps
-from app.agentic.providers.base import ProviderSlot
+from app.agentic.providers.base import ProviderSlot, QuotaGuard
 from app.agentic.providers.breaker import CircuitBreaker
 from app.agentic.providers.gemini import GeminiProvider
 from app.agentic.providers.groq import GroqProvider
@@ -25,7 +24,7 @@ from app.agentic.tracing import NoopTracer, Tracer
 
 
 def build_llm_clients(settings: AgenticSettings, http_client: httpx.AsyncClient) -> dict[str, object]:
-    """Constructs the Groq and Gemini clients once, sharing the app's httpx client for Groq."""
+    """looks up .env API keys and opens the raw connection for Gemini and Groq"""
     clients: dict[str, object] = {}
     if settings.has_groq():
         clients["groq"] = AsyncGroq(api_key=settings.groq_api_key, http_client=http_client)
@@ -35,7 +34,7 @@ def build_llm_clients(settings: AgenticSettings, http_client: httpx.AsyncClient)
 
 
 def build_slots(settings: AgenticSettings, clients: dict[str, object]) -> dict[str, ProviderSlot]:
-    """Wraps each live client in its provider, breaker, and pacer."""
+    """wraps the LLM clients in a ProviderSlot (point 3)"""
     breaker_config = BreakerConfig(
         failure_threshold=settings.breaker_failure_threshold,
         window_seconds=settings.breaker_window_seconds,
@@ -57,12 +56,14 @@ def build_deps(
     pg_pool: asyncpg.Pool | None,
     duckdb_ro: duckdb.DuckDBPyConnection | None,
     tracer: Tracer | None = None,
+    quota: QuotaGuard | None = None,
 ) -> GraphDeps:
-    """Assembles the injected dependency bundle the graph nodes read from."""
+    """never connect the graph to db and LLM Clients, only inject the graph deps (point 1)"""
     return GraphDeps(
         slots=slots,
         pg_pool=pg_pool,
         duckdb_ro=duckdb_ro,
         settings=settings,
         tracer=tracer or NoopTracer(),
+        quota=quota,
     )

@@ -1,11 +1,3 @@
-"""AG-05 normalized provider interface: one request/response shape for Groq and Gemini.
-
-Nodes talk to this interface, never to a vendor SDK, so the degradation ladder can swap
-providers without touching node logic. Transport faults raise typed errors the ladder reads;
-a 200 with unparseable JSON is not a transport fault, it returns with parsed=None for the
-validator to reject.
-"""
-
 from __future__ import annotations
 
 import json
@@ -16,7 +8,6 @@ from pydantic import BaseModel
 
 
 def parse_json_object(text: str) -> dict[str, Any] | None:
-    """Parses model text to a JSON object, or None so the AG-02 validator rejects it."""
     try:
         value = json.loads(text)
     except (json.JSONDecodeError, TypeError):
@@ -25,11 +16,11 @@ def parse_json_object(text: str) -> dict[str, Any] | None:
 
 
 class ProviderError(Exception):
-    """A permanent provider failure; do not retry or cross-substitute on this."""
+    """A permanent provider failure, do not retry or cross-substitute on this."""
 
 
 class ProviderRateLimited(ProviderError):
-    """The provider returned 429; the ladder cross-substitutes and the breaker counts it."""
+    """The provider returned 429, so the ladder cross-substitutes and the breaker counts it."""
 
 
 class ProviderUnavailable(ProviderError):
@@ -38,7 +29,7 @@ class ProviderUnavailable(ProviderError):
 
 @dataclass
 class ProviderRequest:
-    """A single normalized inference request (AG-05)."""
+    """A single normalized inference request"""
 
     objective: str
     prompt_version: str
@@ -53,7 +44,7 @@ class ProviderRequest:
 
 @dataclass
 class ProviderResponse:
-    """A single normalized inference response (AG-05)."""
+    """A single normalized inference response."""
 
     provider: str
     model: str
@@ -73,6 +64,17 @@ class Provider(Protocol):
     name: str
 
     async def complete(self, request: ProviderRequest) -> ProviderResponse: ...
+
+
+@runtime_checkable
+class QuotaGuard(Protocol):
+    """The quota view the ladder consults to skip a provider before its hard 429."""
+
+    def exhausted(self, provider: str) -> bool: ...
+
+    def record(self, provider: str, *, requests: int, tokens: int) -> None: ...
+
+    def consumption(self, provider: str) -> tuple[int, int]: ...
 
 
 @dataclass

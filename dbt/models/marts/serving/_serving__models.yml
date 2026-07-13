@@ -6,6 +6,10 @@ models:
     columns:
       - name: security_id
         data_tests: [not_null]
+      - name: at_price_limit
+        data_tests:
+          - accepted_values:
+              values: [NONE, ARA, ARB]
       - name: data_as_of
         data_tests: [not_null]
   - name: agg_security_snapshot

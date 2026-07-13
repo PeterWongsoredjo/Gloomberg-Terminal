@@ -1,8 +1,8 @@
-"""finalize: wrap accepted drafts in CT-009, gate confidence, and write the ledger.
-
-Only drafts that passed every hard gate become artifacts; a failing draft is dropped and never
-persisted, so a malformed or ungrounded output cannot reach fct_sentiment. The run ends
-SUCCEEDED when at least one artifact survives, otherwise DEGRADED, visible and non-fabricating.
+"""
+Finalize is the main coordinator node for the cleanup phase. It:
+1. filters out any draft that failed the evaluation step
+2. Wraps every accepted draft into a confidence-gated envelope.
+3. writes the final artifacts to the ledger (SUCCEEDED or DEGRADED)
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from app.agentic.state import AgentState
 
 
 def _build_artifact(draft: dict[str, Any], state: AgentState, settings: AgenticSettings) -> Ct009Artifact:
-    """Wraps one accepted draft into a confidence-gated CT-009 envelope."""
     spec = spec_for_type(draft["artifact_type"])
     value = cast(
         SentimentValue | ExtractionValue | InsightValue,
@@ -72,21 +71,22 @@ async def _persist(deps: GraphDeps, state: AgentState, new_dicts: list[dict[str,
 
 
 async def _record_health(deps: GraphDeps) -> None:
-    """Persists each provider's breaker state after the run."""
+    """Persists each provider's breaker state and daily consumption after the run."""
     if deps.pg_pool is None:
         return
     for name, slot in deps.slots.items():
+        requests, tokens = deps.quota.consumption(name) if deps.quota is not None else (0, 0)
         await ledger.record_provider_health(
             deps.pg_pool,
             provider=name,
             breaker_state=slot.breaker.state,
             consecutive_failures=slot.breaker.failure_count,
-            rpd_consumed=0,
+            rpd_consumed=requests,
+            tpd_consumed=tokens,
         )
 
 
 async def finalize(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Persists surviving artifacts, sets the terminal status, closes the run."""
     deps = get_deps(config)
     settings = deps.settings
     accepted = [d for d in state["working"].get("draft_artifacts", []) if d.get("passed")]
