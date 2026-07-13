@@ -7,7 +7,9 @@ envelope-wrapped and the tape stream opens with a snapshot.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -91,20 +93,51 @@ async def test_securities_pagination_walks() -> None:
         await _close(state)
 
 
-async def test_tape_websocket_opens_with_snapshot() -> None:
-    """Connecting to the tape stream yields a snapshot frame first."""
-    state = await _state_or_skip()
+def test_tape_websocket_opens_with_snapshot() -> None:
+    """Connecting to the tape stream yields a snapshot frame first.
+
+    Synchronous so TestClient owns the event loop; the pool is opened inside that loop by the app's
+    own lifespan, since an asyncpg pool is bound to the loop that created it.
+    """
+    if not asyncio.run(_infra_ready()):
+        pytest.skip("postgres/projections/gold not available")
+
+    ws_app = FastAPI(lifespan=_ws_lifespan)
+    ws_app.include_router(tape.router, prefix="/api/v1")
+    with TestClient(ws_app) as client, client.websocket_connect("/api/v1/tape/stream") as socket:
+        frame = socket.receive_json()
+        assert frame["type"] == "snapshot"
+        assert "envelope" in frame
+        socket.close()
+
+
+async def _infra_ready() -> bool:
+    """Probes gold + postgres + the synced projection, closing the probe pool it opens."""
+    if not Path(core_settings.duckdb_gold_path).exists():
+        return False
     try:
-        ws_app = FastAPI()
-        ws_app.include_router(tape.router, prefix="/api/v1")
-        ws_app.dependency_overrides[get_app_state] = lambda: state
-        with TestClient(ws_app) as client, client.websocket_connect("/api/v1/tape/stream") as socket:
-            frame = socket.receive_json()
-            assert frame["type"] == "snapshot"
-            assert "envelope" in frame
-            socket.close()
+        pool = await asyncpg.create_pool(get_agentic_settings().postgres_dsn, min_size=1, max_size=1)
+    except (OSError, asyncpg.PostgresError):
+        return False
+    try:
+        await pool.fetchval('select 1 from public."agg_live_tape" limit 1')
+        return True
+    except asyncpg.PostgresError:
+        return False
     finally:
-        await _close(state)
+        await pool.close()
+
+
+@asynccontextmanager
+async def _ws_lifespan(_app: FastAPI) -> AsyncIterator[dict[str, AppState]]:
+    """Opens the pool and gold connection in TestClient's own loop, for the websocket handler."""
+    pool = await asyncpg.create_pool(get_agentic_settings().postgres_dsn, min_size=1, max_size=2)
+    duckdb_ro = duckdb.connect(str(Path(core_settings.duckdb_gold_path)), read_only=True)
+    try:
+        yield {"app_state": AppState(duckdb_ro=duckdb_ro, pg_pool=pool, slo_engine=SloEngine())}
+    finally:
+        await pool.close()
+        duckdb_ro.close()
 
 
 async def _close(state: AppState) -> None:
