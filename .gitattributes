@@ -1,0 +1,4 @@
+# The frozen eval golden set is verified by an exact byte hash.
+# Never let autocrlf rewrite its line endings, or the hash breaks on Windows.
+services/backend-api/app/eval/golden/*.jsonl        -text
+services/backend-api/app/eval/golden/*.jsonl.sha256 -text
