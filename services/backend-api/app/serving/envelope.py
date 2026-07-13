@@ -1,10 +1,3 @@
-"""The one place a serving payload gets its freshness envelope.
-
-Every REST and WebSocket payload passes through here so market_state and freshness are resolved
-the same honest way everywhere: the calendar decides the session phase, the SLO engine decides
-freshness. No endpoint fills these fields by hand.
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
@@ -17,7 +10,7 @@ from app.observability.slo.engine import SloEngine
 
 DataT = TypeVar("DataT")
 
-# the dataset the EOD freshness SLO is keyed on; price-derived payloads clock against it
+# the dataset the EOD freshness SLO is keyed on, price-derived payloads clock against it
 DATASET_DAILY_TRADE = "idx_summary.daily_trade"
 
 
@@ -55,7 +48,7 @@ def _freshness(
     slo_engine: SloEngine | None,
     calendar: SessionCalendar,
 ) -> bool:
-    """A payload with no EOD-clocked dataset is always current; otherwise ask the SLO engine."""
+    """A payload with no EOD-clocked dataset is always current, otherwise ask the SLO engine."""
     if dataset is None:
         return True
     engine = slo_engine or SloEngine(calendar=calendar)
@@ -63,7 +56,7 @@ def _freshness(
 
 
 def market_state_now(trade_date: date, *, now_utc: datetime | None = None) -> SessionPhase:
-    """The session phase for a date right now; used by the market/state endpoint and the tape."""
+    """The session phase for a date right now, used by the market/state endpoint and the tape."""
     return get_calendar().market_state(trade_date, now_utc or datetime.now(UTC))
 
 

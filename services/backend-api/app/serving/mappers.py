@@ -1,10 +1,3 @@
-"""Turns reader rows into the response view-models.
-
-One place maps a warehouse row to what the UI renders, so the endpoints stay thin wiring. Quality
-flags are coerced against the closed quality-flag vocabulary; an unrecognized flag is dropped
-rather than crashing a read, and would show up as a schema drift upstream.
-"""
-
 from __future__ import annotations
 
 from collections import defaultdict
@@ -35,7 +28,7 @@ _VALID_FLAGS = {f.value for f in QualityFlag}
 
 
 def _flags(raw: Any) -> list[QualityFlag]:
-    """Keeps only recognized quality flags; unknown values are dropped, not coerced."""
+    """Keeps only recognized quality flags, unknown values are dropped, not coerced."""
     if not raw:
         return []
     return [QualityFlag(f) for f in raw if f in _VALID_FLAGS]
@@ -50,7 +43,7 @@ def _integrity(raw: Any) -> PriceIntegrity:
 
 
 def tape_row(row: dict[str, Any]) -> LiveTapeRow:
-    """agg_live_tape row -> tape view-model; last price is the adjusted close."""
+    """agg_live_tape row -> tape view-model, last price is the adjusted close."""
     return LiveTapeRow(
         security_id=row["security_id"],
         ticker=row["ticker"],
@@ -100,7 +93,6 @@ def security_snapshot(row: dict[str, Any]) -> SecuritySnapshot:
 
 
 def sentiment_matrix(rows: list[dict[str, Any]]) -> SentimentMatrix:
-    """Aggregates per-security sentiment into the sector x label grid."""
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     versions: set[str] = set()
     dates: list[date] = []
@@ -133,7 +125,6 @@ def _matrix_cell(sector: str, label: str, members: list[dict[str, Any]]) -> Matr
         mean_score=round(sum(scores) / len(scores), 4) if scores else 0.0,
         mean_confidence=round(sum(confs) / len(confs), 4) if confs else 0.0,
         low_confidence_count=low,
-        # DEGRADED subjects produce no sentiment row, so they are absent here, never fabricated
         degraded_count=0,
     )
 

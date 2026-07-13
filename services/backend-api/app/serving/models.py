@@ -1,9 +1,3 @@
-"""The serving view-models: what each endpoint returns inside the freshness envelope.
-
-Every model here is the `data` half of an `Envelope[...]`; none is ever returned bare. Field
-names mirror the wire JSON the terminal binds to, so there is no translation layer.
-"""
-
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -15,29 +9,21 @@ from app.core.enums import QualityFlag, SessionPhase
 
 
 class _Model(BaseModel):
-    """Serving models forbid unknown fields so a drifting schema fails loudly."""
-
     model_config = ConfigDict(extra="forbid")
 
 
 class PriceLimit(StrEnum):
-    """Whether the last price sits at an auto-reject boundary."""
-
     NONE = "NONE"
     ARA = "ARA"
     ARB = "ARB"
 
 
 class PriceIntegrity(StrEnum):
-    """Whether a price series is safe to read as continuous."""
-
     CLEAN = "CLEAN"
     ADJUSTMENT_PENDING = "ADJUSTMENT_PENDING"
 
 
 class InsightStatus(StrEnum):
-    """The panel's presentation state, driven by confidence and the provider ladder."""
-
     OK = "OK"
     LOW_CONFIDENCE = "LOW_CONFIDENCE"
     DEGRADED = "DEGRADED"
@@ -48,16 +34,12 @@ class InsightStatus(StrEnum):
 
 
 class IndexLevel(_Model):
-    """A headline index reading for the session strip."""
-
     index_code: str
     level: float
     change: float | None
 
 
 class MarketState(_Model):
-    """The session phase plus the headline index for the shell."""
-
     trade_date: date
     session_phase: SessionPhase
     is_trading_day: bool
@@ -69,8 +51,6 @@ class MarketState(_Model):
 
 
 class LiveTapeRow(_Model):
-    """One security's current row on the tape; prices are adjusted close, integer IDR."""
-
     security_id: int
     ticker: str
     board: str
@@ -89,8 +69,6 @@ class LiveTapeRow(_Model):
 
 
 class LiveTapePage(_Model):
-    """A full tape snapshot for the REST path (the WS path streams the same rows)."""
-
     trade_date: date
     rows: list[LiveTapeRow]
 
@@ -99,8 +77,6 @@ class LiveTapePage(_Model):
 
 
 class SecurityRow(_Model):
-    """One entry in the paginated universe list."""
-
     security_id: int
     ticker: str
     isin: str | None
@@ -110,15 +86,11 @@ class SecurityRow(_Model):
 
 
 class SecurityPage(_Model):
-    """A cursor-paginated slice of the universe."""
-
     rows: list[SecurityRow]
     next_cursor: str | None
 
 
 class SecuritySnapshot(_Model):
-    """The Insight Panel header: identity, latest close, integrity, badges."""
-
     security_id: int
     ticker: str
     isin: str | None
@@ -148,8 +120,6 @@ class MatrixAxes(_Model):
 
 
 class MatrixCell(_Model):
-    """One sector x label cell, aggregated from per-security sentiment."""
-
     sector_idxic: str
     sentiment_label: str
     security_count: int
@@ -160,8 +130,6 @@ class MatrixCell(_Model):
 
 
 class SentimentMatrix(_Model):
-    """The sector x label grid, drillable to constituents in the UI."""
-
     as_of_window: MatrixWindow
     axes: MatrixAxes
     cells: list[MatrixCell]
@@ -178,8 +146,6 @@ class InsightSignal(_Model):
 
 
 class InsightProvenance(_Model):
-    """Model provenance; always shown so the panel is transparent."""
-
     provider: str
     model: str
     prompt_version: str
@@ -189,8 +155,6 @@ class InsightProvenance(_Model):
 
 
 class InsightPanel(_Model):
-    """A descriptive, non-advisory read on one security with full provenance."""
-
     ticker: str
     headline: str
     narrative: str
@@ -206,8 +170,6 @@ class InsightPanel(_Model):
 
 
 class DataTelemetry(_Model):
-    """A projection of the daily telemetry rollup row for the Data Telemetry panel."""
-
     trade_date: date
     session_state: str
     coverage_ratio: float | None
@@ -235,8 +197,6 @@ class DataTelemetry(_Model):
 
 
 class Candle(_Model):
-    """One daily bar; EOD data, integer IDR, split-adjusted close alongside the raw close."""
-
     trade_date: date
     open_idr: int | None
     high_idr: int | None
@@ -249,8 +209,6 @@ class Candle(_Model):
 
 
 class PriceSeries(_Model):
-    """A daily OHLC series for the chart column."""
-
     ticker: str
     bars: list[Candle]
 
@@ -259,8 +217,6 @@ class PriceSeries(_Model):
 
 
 class NewsItem(_Model):
-    """One headline; tickers[] links it to securities for the news-click interaction."""
-
     item_id: str
     trade_date: date
     source: str
@@ -273,8 +229,6 @@ class NewsItem(_Model):
 
 
 class NewsFeedPage(_Model):
-    """A cursor-paginated slice of the news feed, newest first."""
-
     rows: list[NewsItem]
     next_cursor: str | None
 
@@ -283,16 +237,12 @@ class NewsFeedPage(_Model):
 
 
 class TraceStep(_Model):
-    """One node in the agent's path; descriptive, never a buy/sell rationale."""
-
     node: str
     status: str
     detail: str | None
 
 
 class RunReasoningTrace(_Model):
-    """How a run reached its result: the ordered nodes, iterations, and provenance."""
-
     run_id: str
     objective: str
     trade_date: date

@@ -1,8 +1,5 @@
-"""Read-only DuckDB Gold access for facts not projected to Postgres.
-
-Candles, news, the insight narrative, and the headline index live only in Gold. Every query runs
-on its own cursor inside a worker thread so a blocking scan never stalls the event loop. A missing
-snapshot or table yields empty, never a crash.
+"""
+Read-only DuckDB Gold access for facts not projected to Postgres.
 """
 
 from __future__ import annotations
@@ -74,7 +71,6 @@ class ServingGoldReader:
         return await self._safe(sql, params)
 
     async def insight(self, ticker: str) -> dict[str, Any] | None:
-        """The latest insight narrative for a ticker; the agent writes it through dbt, never here."""
         sql = """
             select artifact_id, ticker, trade_date, prompt_version, headline, narrative,
                    contradictions, confidence, provider, model, generated_at, dq_flags

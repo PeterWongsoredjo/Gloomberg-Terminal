@@ -1,10 +1,3 @@
-"""Conditional-GET support.
-
-An ETag binds a response to its Gold snapshot: it hashes the data's freshness plus the query, so
-a client that already holds the current version gets a 304 and no payload. A snapshot swap moves
-data_as_of, which moves the ETag.
-"""
-
 from __future__ import annotations
 
 import hashlib
