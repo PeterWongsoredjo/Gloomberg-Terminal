@@ -1,18 +1,18 @@
-"""Shared request dependencies: the operator auth stub and the lifespan resource accessor.
-
-These are the first real readers of the lifespan seam. The auth check is a single-operator stub
-(SV-10): a static token when one is configured, loopback-trust otherwise. Nothing here builds a
-resource; it only hands endpoints what the lifespan already built once.
+"""
+Shared request dependencies: the operator auth stub and the lifespan resource accessor.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from typing import cast
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, status
+from starlette.requests import HTTPConnection
 
 from app.core.config import settings
 from app.lifespan import AppState
+from app.serving.readers.gold import ServingGoldReader
 
 
 async def require_operator(authorization: str | None = Header(default=None)) -> None:
@@ -24,9 +24,9 @@ async def require_operator(authorization: str | None = Header(default=None)) -> 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid operator token")
 
 
-def get_app_state(request: Request) -> AppState:
-    """Returns the process-scoped resources the lifespan yielded onto request state."""
-    return cast(AppState, request.state.app_state)
+def get_app_state(connection: HTTPConnection) -> AppState:
+    """Returns the process-scoped resources the lifespan yielded, works for REST and WebSocket."""
+    return cast(AppState, connection.state.app_state)
 
 
 def require_agentic(app_state: AppState = Depends(get_app_state)) -> AppState:
@@ -36,3 +36,9 @@ def require_agentic(app_state: AppState = Depends(get_app_state)) -> AppState:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="agentic layer unavailable"
         )
     return app_state
+
+
+async def anchor_trade_date(app_state: AppState) -> date:
+    """The latest trade_date in Gold, or today, anchors the envelope's session phase."""
+    latest = await ServingGoldReader(app_state.duckdb_ro).latest_trade_date()
+    return date.fromisoformat(latest) if latest else datetime.now(UTC).date()
