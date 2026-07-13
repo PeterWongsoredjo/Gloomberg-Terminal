@@ -12,12 +12,12 @@ def snapshot_frame(rows: list[dict[str, Any]], header: dict[str, Any], seq: int)
 
 
 def delta_frame(changed: list[dict[str, Any]], header: dict[str, Any], seq: int) -> dict[str, Any]:
-    """Only the rows that changed since the last frame; applied by security_id."""
+    """Only the rows that changed since the last frame, applied by security_id."""
     return {"type": "delta", "envelope": header, "changed": changed, "seq": seq}
 
 
 def market_state_frame(state: str, header: dict[str, Any], seq: int) -> dict[str, Any]:
-    """A session-phase transition; the tape freezes or resumes off this."""
+    """A session-phase transition, the tape freezes or resumes off this."""
     return {"type": "market_state", "envelope": header, "state": state, "seq": seq}
 
 

@@ -1,7 +1,5 @@
-"""The outbound coalescing buffer that keeps a slow consumer from growing memory.
-
-Pending changes are keyed by security_id, so a burst of updates to the same security collapses to
-its latest state. The buffer can never exceed the universe size, so there is no unbounded queue.
+"""
+The outbound coalescing buffer that keeps a slow consumer from growing memory.
 """
 
 from __future__ import annotations

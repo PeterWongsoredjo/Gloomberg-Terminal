@@ -1,8 +1,5 @@
-"""Streams the Live Tape to one WebSocket client.
-
-On connect the client gets a full snapshot, then only the rows that changed. Changes are coalesced
-per security, so a slow reader can never grow server memory; if a send keeps timing out the client
-is disconnected with a problem frame. When the market is closed the tape freezes to heartbeats.
+"""
+Streams the Live Tape to one WebSocket client.
 """
 
 from __future__ import annotations
@@ -119,7 +116,7 @@ class TapeStreamer:
                 "type": "https://gloomberg/errors/slow-consumer",
                 "title": "Tape stream fell behind",
                 "status": 408,
-                "detail": "The client could not keep up with the tape; reconnect to resync.",
+                "detail": "The client could not keep up with the tape, reconnect to resync.",
             }
             await self._raw_send(frames.error_frame(problem))
             await self._ws.close()
@@ -156,12 +153,12 @@ class TapeStreamer:
         return self._seq
 
     async def _send(self, frame: dict[str, Any]) -> None:
-        """Sends a control/snapshot frame; a timeout here is treated as a lost client."""
+        """Sends a control/snapshot frame, a timeout here is treated as a lost client."""
         if not await self._try_send(frame):
             raise _StreamAborted
 
     async def _try_send(self, frame: dict[str, Any]) -> bool:
-        """Sends within the timeout; False on timeout so the caller can coalesce and retry."""
+        """Sends within the timeout, False on timeout so the caller can coalesce and retry."""
         try:
             await asyncio.wait_for(self._raw_send(frame), timeout=self._send_timeout)
             return True
