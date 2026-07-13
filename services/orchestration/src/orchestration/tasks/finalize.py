@@ -1,5 +1,3 @@
-"""OR-01 phase 8: emit the terminal run-state event so a run is observable even when it failed."""
-
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -16,7 +14,6 @@ def finalize_run(
     started_at: datetime,
     notes: str,
 ) -> bool:
-    """Builds and sinks the finalize event; best-effort, never raises (05 1.3)."""
     event = build_event(
         flow_run_id=flow_run_id,
         trade_date=trade_date,

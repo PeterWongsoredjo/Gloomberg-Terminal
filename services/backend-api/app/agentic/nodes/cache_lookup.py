@@ -1,8 +1,5 @@
-"""cache_lookup: return a fresh cached result before spending any tokens (AG-08).
-
-A hit within the freshness window short-circuits straight to finalize, skipping inference. A
-miss, a stale entry, or no ledger pool falls through to routing. Tier-2 (serving a stale entry
-during an outage) lives in the analysis node, not here.
+"""
+return a fresh cached result before spending any tokens.
 """
 
 from __future__ import annotations
@@ -17,7 +14,6 @@ from app.agentic.state import AgentState
 
 
 async def cache_lookup(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Sets cache_hit and, on a fresh hit, loads the cached artifacts into state."""
     deps = get_deps(config)
     async with deps.tracer.span("cache_lookup", state["run_id"]):
         if deps.pg_pool is None:

@@ -1,9 +1,6 @@
-"""OR-01 phase 7: hand the agentic run to backend-api over authenticated loopback.
-
-Orchestration triggers and polls; it never hosts the graph or opens an LLM client (OR-04,
-04 3.4). The trigger is idempotent by (objective:trade_date), so a retried trigger 409s
-instead of double-launching. A DEGRADED or ABORTED terminal status is a completed step, not
-a flow failure. An unreachable backend-api leaves promoted Gold intact and degrades only this step.
+"""
+Uses an idempotency key (derived from the trade date and objective) 
+to ensure we don't accidentally spin up duplicate LLM analyses
 """
 
 from __future__ import annotations
@@ -24,13 +21,11 @@ from orchestration.retries import (
     retry_on_transient_trigger,
 )
 
-# CT-010 terminal statuses and how each maps to this phase's OR-06 status
 _TERMINAL_STATUS = {"SUCCEEDED": "SUCCESS", "DEGRADED": "DEGRADED", "ABORTED": "DEGRADED"}
 TERMINAL = set(_TERMINAL_STATUS)
 
 
 def _run_id(response: httpx.Response) -> str | None:
-    """Pulls run_id from a bare {run_id} body or a CT-011-enveloped one."""
     try:
         body = response.json()
     except ValueError:
@@ -44,8 +39,6 @@ def _run_id(response: httpx.Response) -> str | None:
 
 
 class TriggerClient:
-    """Thin loopback client for backend-api's scheduled-run seam (06 3.5)."""
-
     def __init__(
         self,
         base_url: str,
@@ -65,7 +58,7 @@ class TriggerClient:
         self._client.close()
 
     def launch(self, objective: str, trade_date: date, universe: list[str]) -> str | None:
-        """POSTs the run; returns run_id (202/200 or an idempotent 409), else raises typed."""
+        """POSTs the run, returns run_id (202/200 or an idempotent 409), else raises typed."""
         body = {
             "objective": objective,
             "trade_date": trade_date.isoformat(),
@@ -83,7 +76,7 @@ class TriggerClient:
         raise TriggerPermanentError(f"POST /runs -> {resp.status_code}")
 
     def poll(self, run_id: str, interval: float, timeout: float) -> str:
-        """Polls run status until a CT-010 terminal state or a hard timeout."""
+        """Polls run status until a terminal state or a hard timeout."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
@@ -107,7 +100,6 @@ class TriggerClient:
     retry_condition_fn=retry_on_transient_trigger,
 )
 def trigger_agentic(trade_date: date, config: OrchestrationConfig) -> PhaseResult:
-    """Launches the agentic run in backend-api and polls it to a terminal status."""
     with TriggerClient(
         config.backend_api_url, config.backend_api_token, config.trigger_timeout_seconds
     ) as client:

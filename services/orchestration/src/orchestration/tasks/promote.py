@@ -1,8 +1,6 @@
-"""OR-01 phase 6: publish Gold and refresh the agg_* projections, atomically.
-
-Both the DuckDB snapshot swap and the Postgres refresh are Stage-1 functions; here we only
-sequence them under the held duckdb_writer lease (ADR-001). A failure here leaves the prior
-Gold live, because the swap is a single os.replace and the sync is one transaction.
+"""
+Swaps the newly generated Gold DuckDB file into production and 
+mirrors key aggregates to Postgres.
 """
 
 from __future__ import annotations

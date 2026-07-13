@@ -1,7 +1,7 @@
-"""Read-only Gold access for the graph, always off the event loop in a threadpool.
+"""
+Provides read-only SQL access to the published Gold Data snapshot in DuckDB.
 
-The agent reads a published, immutable Gold snapshot; it never writes DuckDB (ADR-001). Every
-call runs on its own cursor inside a worker thread so a blocking DuckDB scan never stalls the
+Every call runs on its own cursor inside a worker thread so a blocking DuckDB scan never stalls the
 async runtime. A missing snapshot yields empty context, not a crash.
 """
 
@@ -14,13 +14,10 @@ import duckdb
 
 
 def _placeholders(values: list[str]) -> str:
-    """Builds a comma-separated ? list for a SQL IN clause."""
     return ", ".join("?" for _ in values)
 
 
 class GoldReader:
-    """Wraps the read-only DuckDB connection with the queries the graph needs."""
-
     def __init__(self, connection: duckdb.DuckDBPyConnection | None) -> None:
         self._connection = connection
 
@@ -41,12 +38,10 @@ class GoldReader:
         return await asyncio.to_thread(_run)
 
     async def current_tickers(self) -> set[str]:
-        """Every ticker with a current security version; the entity-resolution universe."""
         rows = await self._rows("select ticker from dim_security where is_current", [])
         return {str(r["ticker"]) for r in rows}
 
     async def market_context(self, trade_date: str, universe: list[str]) -> list[dict[str, Any]]:
-        """Per-security close, return, flow, board, and notation for the window."""
         if not universe:
             return []
         sql = f"""
@@ -62,7 +57,6 @@ class GoldReader:
         return await self._rows(sql, [trade_date, *universe])
 
     async def corporate_actions(self, universe: list[str], trade_date: str) -> list[dict[str, Any]]:
-        """Corporate actions effective on or around the window, to suppress false signals."""
         if not universe:
             return []
         sql = f"""
@@ -75,7 +69,6 @@ class GoldReader:
         return await self._rows(sql, [*universe, trade_date, trade_date])
 
     async def news_items(self, trade_date: str) -> list[dict[str, Any]]:
-        """News landed in Gold for the trade_date; empty when the news feed is absent."""
         sql = """
             select item_id, trade_date, source, lang, title, summary, url,
                    published_at, tickers

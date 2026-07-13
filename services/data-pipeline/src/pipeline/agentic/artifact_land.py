@@ -1,9 +1,5 @@
-"""Lands the CT-009 artifact ledger from Postgres into Bronze for the dbt projection.
-
-The agentic layer writes artifacts to Postgres (ADR-001: it never writes DuckDB Gold). This
-reads that ledger through a DuckDB Postgres attach and lands one JSON payload per artifact type
-under agent_artifact/{type}, with a CT-003 manifest, so fct_sentiment and fct_insight build from
-Bronze like every other feed and every Gold row still traces to a manifest.
+"""
+Data bridge between the AI agents and the main analytical warehouse
 """
 
 from __future__ import annotations

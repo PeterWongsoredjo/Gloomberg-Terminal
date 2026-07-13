@@ -1,6 +1,7 @@
-"""Captures frozen-real IDX payloads as Bronze fixtures via a TLS-spoofing client.
+"""
+Captures frozen-real IDX payloads as Bronze fixtures via a TLS-spoofing client.
 
-The IDX and KSEI sites sit behind Cloudflare; a plain client gets 403. The shared `fetch`
+The IDX and KSEI sites sit behind Cloudflare, a plain client gets 403. The shared `fetch`
 helper presents a real browser fingerprint and gets through. Run once to refresh the
 committed JSON fixtures under `fixtures/frozen/`. Endpoints live in `pipeline.bronze.feeds`.
 """

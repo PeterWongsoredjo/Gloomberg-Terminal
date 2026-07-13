@@ -1,5 +1,5 @@
 """
-Shared request dependencies: the operator auth stub and the lifespan resource accessor.
+Authentication and dependency injection for FastAPI endpoints.
 """
 
 from __future__ import annotations

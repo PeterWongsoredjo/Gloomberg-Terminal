@@ -48,7 +48,7 @@ async def get_market_state(app_state: AppState = Depends(get_app_state)) -> Enve
         slo_engine=app_state.slo_engine,
     )
 
-
+    
 def _index_level(row: dict[str, object] | None) -> IndexLevel | None:
     if row is None:
         return None

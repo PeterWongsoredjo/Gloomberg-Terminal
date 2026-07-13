@@ -1,9 +1,5 @@
-"""Loads fixture payloads into MinIO Bronze via the shared land primitive.
-
-Fixtures mirror what live ingest lands. Each partition directory looks like
-`{source}/{dataset}/ingest_date=YYYY-MM-DD/source_version=vN/` and holds `part-*.json`
-raw payloads plus a `_meta.json` describing the manifest inputs (record_count,
-expected_universe, missing_tickers). A deterministic run id makes a re-load replace, not pile up.
+"""
+loads raw offline data fixtures and imports to MinIO bronze bucket
 """
 
 from __future__ import annotations
@@ -24,7 +20,6 @@ META_FILE = "_meta.json"
 
 
 def _parse_partition(part_dir: Path, kind_root: Path) -> tuple[str, str, date, str]:
-    """Pulls source, dataset, trade_date, and source_version out of the Hive path."""
     rel = part_dir.relative_to(kind_root).parts
     ingest = next(p for p in rel if p.startswith("ingest_date="))
     version = next(p for p in rel if p.startswith("source_version="))
@@ -36,7 +31,6 @@ def _parse_partition(part_dir: Path, kind_root: Path) -> tuple[str, str, date, s
 
 
 def load_partition(minio: Minio, part_dir: Path, kind_root: Path) -> dict[str, Any]:
-    """Loads one partition's payloads + manifest into Bronze; returns the manifest."""
     source, dataset, trade_date, source_version = _parse_partition(part_dir, kind_root)
     meta = json.loads((part_dir / META_FILE).read_text(encoding="utf-8"))
     run_id = deterministic_run_id(idempotency_key(source, dataset, trade_date, source_version))
@@ -58,7 +52,6 @@ def load_partition(minio: Minio, part_dir: Path, kind_root: Path) -> dict[str, A
 
 
 def load_fixtures(fixtures_root: Path, settings: Settings) -> list[dict[str, Any]]:
-    """Loads every partition under a fixtures kind directory into Bronze."""
     minio = client(settings)
     manifests: list[dict[str, Any]] = []
     for meta_path in sorted(fixtures_root.rglob(META_FILE)):

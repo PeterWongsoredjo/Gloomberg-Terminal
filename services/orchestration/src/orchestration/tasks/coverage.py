@@ -1,5 +1,6 @@
-"""OR-01 phases 3+4: the coverage gate. The manifest is written during ingest; here we
-decide, per the OR-06 table, whether the run promotes, degrades to PARTIAL, or blocks.
+"""
+the coverage gate. The manifest is written during ingest, here we
+decide, whether the run promotes, degrades to PARTIAL, or blocks.
 """
 
 from __future__ import annotations
@@ -23,7 +24,6 @@ def evaluate_coverage(
     floor: float,
     hard_min: float,
 ) -> PhaseResult:
-    """Applies the OR-06 decision table to the run-date manifests; no promotion below hard_min."""
     dated = [m for m in manifests if m["trade_date"] == trade_date.isoformat()]
     universe = [m for m in dated if (m["source"], m["dataset"]) in UNIVERSE_PAIRS]
 
@@ -65,5 +65,4 @@ def coverage_gate(
     floor: float,
     hard_min: float,
 ) -> PhaseResult:
-    """Coverage decision as an OR-01 phase task."""
     return evaluate_coverage(manifests, trade_date, floor, hard_min)

@@ -1,8 +1,6 @@
-"""AG-02 structured output schemas and the CT-009 provenance envelope.
-
-Every model call must return JSON conforming to one of these closed schemas; free text is
-never accepted as a fact. The value models forbid unknown fields so a hallucinated key fails
-validation instead of slipping through.
+"""
+Structured output schemas for the LLM, dictating the exact JSON shape for each 
+artifact type. Wrapped in an envelope to log out each prompt
 """
 
 from __future__ import annotations
@@ -18,7 +16,7 @@ SentimentLabel = Literal["BEARISH", "NEUTRAL", "BULLISH"]
 ArtifactType = Literal["SENTIMENT", "EXTRACTION", "SUMMARY", "INSIGHT"]
 Verdict = Literal["ACCEPT", "OPTIMIZE", "REJECT"]
 
-# CT-007 corporate-action enum plus the extraction escape hatch
+# corporate-action enum plus the extraction escape hatch
 EventType = Literal[
     "CASH_DIVIDEND",
     "STOCK_DIVIDEND",
@@ -37,14 +35,10 @@ EventType = Literal[
 
 
 class _Strict(BaseModel):
-    """Rejects any field not declared here, so hallucinated keys fail validation."""
-
     model_config = ConfigDict(extra="forbid")
 
 
 class SentimentValue(_Strict):
-    """The value block of a SENTIMENT artifact."""
-
     sentiment_score: float = Field(ge=-1.0, le=1.0)
     sentiment_label: SentimentLabel
     drivers: list[str] = Field(default_factory=list, max_length=5)
@@ -53,8 +47,6 @@ class SentimentValue(_Strict):
 
 
 class Event(_Strict):
-    """One extracted market event inside an EXTRACTION artifact."""
-
     event_type: EventType
     security_id: int | None = None
     fields: dict[str, str | int] = Field(default_factory=dict)
@@ -63,23 +55,17 @@ class Event(_Strict):
 
 
 class ExtractionValue(_Strict):
-    """The value block of an EXTRACTION artifact."""
-
     events: list[Event] = Field(default_factory=list)
     unresolved_entities: list[str] = Field(default_factory=list)
 
 
 class InsightSignal(_Strict):
-    """One supporting signal cited by an INSIGHT narrative."""
-
     type: Literal["SENTIMENT", "FLOW", "PRICE"]
     ref_artifact_id: str | None = None
     value: str | None = None
 
 
 class InsightValue(_Strict):
-    """The value block of an INSIGHT artifact; no advisory field exists by design."""
-
     headline: str
     narrative: str
     signals: list[InsightSignal] = Field(default_factory=list)
@@ -88,8 +74,6 @@ class InsightValue(_Strict):
 
 
 class EvaluatorChecks(_Strict):
-    """The AG-04 hard gates plus the calibrated confidence."""
-
     schema_valid: bool
     grounded: bool
     entities_resolved: bool
@@ -99,8 +83,6 @@ class EvaluatorChecks(_Strict):
 
 
 class EvaluatorVerdict(_Strict):
-    """The AG-04 verdict that drives the optimize-or-accept edge."""
-
     checks: EvaluatorChecks
     verdict: Verdict
     reasons: list[str] = Field(default_factory=list)
@@ -108,15 +90,11 @@ class EvaluatorVerdict(_Strict):
 
 
 class Subject(_Strict):
-    """The instrument an artifact is about."""
-
     security_id: int | None = None
     ticker: str | None = None
 
 
 class Window(_Strict):
-    """The WIB trade-date window an artifact covers."""
-
     from_: date = Field(alias="from")
     to: date
 
@@ -124,15 +102,11 @@ class Window(_Strict):
 
 
 class TokenUsage(_Strict):
-    """Prompt and completion token counts for one artifact's inference."""
-
     prompt: int = 0
     completion: int = 0
 
 
 class Provenance(_Strict):
-    """Everything needed to reproduce an artifact against its exact inputs."""
-
     provider: str
     model: str
     prompt_version: str
@@ -144,8 +118,6 @@ class Provenance(_Strict):
 
 
 class Ct009Artifact(_Strict):
-    """The CT-009 envelope: the only shape a model-derived value reaches the warehouse in."""
-
     schema_version: str = "1.0.0"
     artifact_id: str
     artifact_type: ArtifactType

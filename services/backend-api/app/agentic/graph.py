@@ -1,8 +1,5 @@
-"""AG-01 graph assembly: nodes, conditional edges, and the checkpointer.
-
-The topology is the 04 3.1 state machine: assemble context, check the cache, route by objective,
-analyze, evaluate, and loop through optimize until the hard cap, then finalize. The checkpointer
-is injected so a run is resumable by thread_id; tests compile without one.
+"""
+The topography of the LangGraph state machine, wires up worker nodes
 """
 
 from __future__ import annotations
@@ -31,12 +28,10 @@ _ANALYSIS_NODES: dict[Hashable, str] = {name: name for name in _ANALYSIS_NODE_NA
 
 
 def _route_after_cache(state: AgentState) -> str:
-    """A fresh cache hit skips inference straight to finalize."""
     return "finalize" if state.get("cache_hit") else "route_task"
 
 
 def build_graph(checkpointer: Any | None = None) -> Any:
-    """Wires the node graph and compiles it with an optional checkpointer."""
     builder = StateGraph(AgentState)
     builder.add_node("ingest_context", ingest_context)
     builder.add_node("cache_lookup", cache_lookup)

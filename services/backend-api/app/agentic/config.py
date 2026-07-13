@@ -1,8 +1,5 @@
-"""Env-driven agentic settings: budgets, confidence gates, provider models and keys.
-
-Provider limits and gates are config, not code constants, mirroring how the platform treats
-every volatile external parameter. The repo-root .env holds the real provider keys; both the
-GEMINI_API_KEY and GOOGLE_AI_STUDIO_API_KEY spellings are accepted so either works.
+"""
+Env-driven agentic settings: budgets, confidence gates, provider models and keys.
 """
 
 from __future__ import annotations
@@ -18,8 +15,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class AgenticSettings(BaseSettings):
-    """Everything the graph needs to run against the free-tier providers."""
-
     model_config = SettingsConfigDict(env_file=_REPO_ROOT / ".env", extra="ignore")
 
     groq_api_key: str = Field(default="", validation_alias="GROQ_API_KEY")
@@ -39,42 +34,38 @@ class AgenticSettings(BaseSettings):
     groq_fallback_model: str = "llama-3.1-8b-instant"
     gemini_model: str = "gemini-2.5-flash-lite"
 
-    # CT-010 default budget caps; a run may tighten but never loosen these
+    # budget caps
     max_loop_iterations: int = 3
     max_total_tokens: int = 60000
 
-    # confidence gates per objective; below the gate an artifact is LLM_LOW_CONFIDENCE
+    # confidence gates
     sentiment_confidence_gate: float = 0.5
     extraction_confidence_gate: float = 0.5
     insight_confidence_gate: float = 0.45
 
-    # AG-06 circuit breaker (effective config, not hardcoded constants)
+    # circuit breaker
     breaker_failure_threshold: int = 5
     breaker_window_seconds: float = 60.0
     breaker_cooldown_seconds: float = 120.0
 
-    # AG-08 cache: happy-path reuse window and the wider Tier-2 staleness budget
+    # cache
     cache_ttl_hours: int = 20
     cache_staleness_budget_hours: int = 48
 
     @property
     def postgres_dsn(self) -> str:
-        """libpq URL for asyncpg, psycopg, and the checkpointer."""
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
     def has_groq(self) -> bool:
-        """True when a real Groq key is present, so live calls are possible."""
         return bool(self.groq_api_key)
 
     def has_gemini(self) -> bool:
-        """True when a real Gemini key is present, so live calls are possible."""
         return bool(self.google_api_key)
 
 
 @lru_cache(maxsize=1)
 def get_agentic_settings() -> AgenticSettings:
-    """Builds the agentic settings once from the environment and root .env."""
     return AgenticSettings()

@@ -1,4 +1,4 @@
-"""Builds the CT-003 ingestion run manifest — the idempotency + coverage anchor."""
+"""Builds the ingestion run manifest - the idempotency + coverage anchor."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def content_sha256(payloads: list[bytes]) -> str:
 
 
 def idempotency_key(source: str, dataset: str, trade_date: date, source_version: str) -> str:
-    """The CT-003 key that makes a same-scope re-run replace, not duplicate."""
+    """The key that makes a same-scope re-run replace, not duplicate."""
     return f"{source}:{dataset}:{trade_date.isoformat()}:{source_version}"
 
 
@@ -42,7 +42,7 @@ def build_manifest(
     status: str | None = None,
     notes: str = "",
 ) -> dict[str, Any]:
-    """Assembles a full CT-003 manifest for one Bronze ingestion run."""
+    """Assembles a full manifest for one Bronze ingestion run."""
     observed = expected_universe - len(missing_tickers)
     coverage_ratio = round(observed / expected_universe, 4) if expected_universe else 1.0
     resolved_status = status or ("SUCCESS" if not missing_tickers else "PARTIAL")
@@ -73,5 +73,4 @@ def build_manifest(
 
 
 def iso_utc(moment: datetime) -> str:
-    """UTC RFC-3339 with a trailing Z, per CT-001."""
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

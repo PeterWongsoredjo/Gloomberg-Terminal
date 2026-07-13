@@ -1,4 +1,6 @@
-"""Builds the CT-002 Hive object keys and the CT-003 manifest key for Bronze."""
+"""
+Builds the Hive object keys and the manifest key for Bronze.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ def object_key(
     seq: int,
     ext: str = "json",
 ) -> str:
-    """Full Bronze object key for one payload part, Hive-partitioned per CT-002."""
+    """Full Bronze object key for one payload part, Hive-partitioned."""
     return (
         f"{source}/{dataset}/"
         f"ingest_date={trade_date.isoformat()}/"
@@ -24,7 +26,7 @@ def object_key(
 
 
 def manifest_key(source: str, dataset: str, trade_date: date, ingest_run_id: str) -> str:
-    """Key for the one CT-003 manifest emitted per ingestion run."""
+    """Key for the one manifest emitted per ingestion run."""
     return (
         f"_manifests/{source}/{dataset}/"
         f"ingest_date={trade_date.isoformat()}/{ingest_run_id}.json"

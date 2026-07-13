@@ -14,8 +14,6 @@ DEFAULT_UNIVERSE = ["BBCA", "BBRI", "TLKM", "ASII"]
 
 @dataclass(frozen=True)
 class OrchestrationConfig:
-    """Everything the daily flow needs, all overridable from the environment."""
-
     dbt_dir: Path
     calendar_seed: Path
     coverage_floor: float
@@ -32,13 +30,11 @@ class OrchestrationConfig:
 
 
 def _universe() -> list[str]:
-    """Reads a comma-separated subject universe, falling back to the liquid default."""
     raw = os.environ.get("GLOOMBERG_ORCH_UNIVERSE", "").strip()
     return [t.strip().upper() for t in raw.split(",") if t.strip()] or list(DEFAULT_UNIVERSE)
 
 
 def get_config() -> OrchestrationConfig:
-    """Builds the orchestration config from the environment, loading the root .env first."""
     load_root_env()
     return OrchestrationConfig(
         dbt_dir=Path(os.environ.get("GLOOMBERG_ORCH_DBT_DIR", str(REPO_ROOT / "dbt"))),

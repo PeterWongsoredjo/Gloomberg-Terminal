@@ -2,7 +2,7 @@ version: 2
 
 seeds:
   - name: ref_price_band
-    description: "CT-006 effective-dated tick size and ARA/ARB limits per price band."
+    description: "effective-dated tick size and ARA/ARB limits per price band."
     config:
       column_types:
         band_id: integer
@@ -20,7 +20,7 @@ seeds:
         data_tests: [not_null]
 
   - name: ref_market_calendar
-    description: "CT-005 calendar exceptions (holidays, special sessions). Spine is generated."
+    description: "calendar exceptions (holidays, special sessions). Spine is generated."
     config:
       column_types:
         trade_date: date

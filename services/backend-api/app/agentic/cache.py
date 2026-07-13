@@ -1,9 +1,6 @@
-"""AG-08 exact-match artifact cache, checked before any token spend.
-
-The key is a hash of the deterministic inputs, so identical context returns the stored CT-009
-artifacts and skips inference entirely. The same entry serves two callers: cache_lookup reuses
-a fresh entry on the happy path, and Tier-2 of the ladder serves a still-in-budget entry stamped
-STALE. The caller applies the age threshold; this module just stores and fetches.
+"""
+Hashes a run's parameters, if in the lifespan the same run is hit, then
+the LLM just finalizes, no need to run it again for the same result
 """
 
 from __future__ import annotations
@@ -27,7 +24,6 @@ def compute_key(
     news_fingerprint: str,
     market_fingerprint: str,
 ) -> str:
-    """Hashes the deterministic inputs into one stable cache key."""
     payload = "|".join(
         [
             objective,
@@ -57,7 +53,6 @@ class CacheHit:
 
 
 async def get(pool: asyncpg.Pool, cache_key: str) -> CacheHit | None:
-    """Fetches a cached run's artifacts and its age, or None on a miss."""
     row = await pool.fetchrow(
         "select artifacts, stored_at from agentic.artifact_cache where cache_key = $1",
         cache_key,
@@ -69,7 +64,6 @@ async def get(pool: asyncpg.Pool, cache_key: str) -> CacheHit | None:
 
 
 async def put(pool: asyncpg.Pool, cache_key: str, artifacts: list[dict[str, Any]]) -> None:
-    """Stores a run's artifacts under its key, replacing any prior entry."""
     await pool.execute(
         """
         insert into agentic.artifact_cache (cache_key, artifacts, stored_at)

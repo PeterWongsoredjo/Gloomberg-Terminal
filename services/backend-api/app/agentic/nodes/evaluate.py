@@ -1,9 +1,6 @@
-"""evaluate: grade each draft against the AG-04 rubric and pick the loop's next move.
-
-The rubric gates are deterministic, so grading is reproducible and spends no tokens: schema
-conformance, grounding, entity resolution, non-advisory language, and context consistency with
-corporate-action facts. Any hard-gate failure blocks ACCEPT; while iterations and tokens remain
-the run optimizes, otherwise the failing drafts are dropped at finalize.
+"""
+evaluates what an agent returns, this way we can block hallucination
+and every negative that an agent might do
 """
 
 from __future__ import annotations
@@ -21,7 +18,6 @@ _PRICE_DROP = re.compile(r"crash|plunge|anjlok|jatuh|merosot|tumbang|sell-?off|c
 
 
 def _corp_action_tickers(state: AgentState) -> set[str]:
-    """Tickers with a price-affecting corporate action in the window."""
     affecting = {"STOCK_SPLIT", "REVERSE_SPLIT", "RIGHTS_ISSUE", "BONUS_SHARES", "STOCK_DIVIDEND"}
     return {
         str(a["ticker"])
@@ -62,7 +58,6 @@ def _context_consistent(objective: str, draft: dict[str, Any], corp_tickers: set
 
 
 def _checks(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> dict[str, Any]:
-    """The full AG-04 check block for one draft."""
     schema_valid = not draft["invalid"] and draft["value"] is not None
     if not schema_valid:
         return {
@@ -88,12 +83,10 @@ _HARD_GATES = ("schema_valid", "grounded", "entities_resolved", "non_advisory", 
 
 
 def _passed(checks: dict[str, Any]) -> bool:
-    """True when every hard gate holds for a draft."""
     return all(bool(checks[g]) for g in _HARD_GATES)
 
 
 async def evaluate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Annotates each draft with its checks and sets the batch verdict."""
     deps = get_deps(config)
     objective = state["objective"]
     corp_tickers = _corp_action_tickers(state)
@@ -127,6 +120,5 @@ async def evaluate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
 
 
 def route_after_evaluate(state: AgentState) -> str:
-    """Sends the run to optimize on OPTIMIZE, otherwise to finalize."""
     verdict = (state["working"].get("evaluation") or {}).get("verdict")
     return "optimize" if verdict == "OPTIMIZE" else "finalize"

@@ -1,8 +1,5 @@
-"""OR-06 run-state events: the phase-by-phase record the observability plane (05) consumes.
-
-We own the emit side. Events carry the OB-01 correlation anchors so an operator can pivot
-from a Data Telemetry figure back to the flow run that produced it. The sink is best-effort:
-a down Postgres never blocks the workload (05 1.3) — emission failures are swallowed and logged.
+"""
+Provides database logs that power the observability engine
 """
 
 from __future__ import annotations
@@ -50,7 +47,6 @@ def build_event(
     gate: dict[str, Any] | None = None,
     notes: str = "",
 ) -> dict[str, Any]:
-    """Assembles one OR-06 run-state event with its OB-01 correlation anchors."""
     event: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "flow_run_id": flow_run_id,
@@ -72,8 +68,6 @@ def build_event(
 
 
 def sink_event(event: dict[str, Any], dsn: str) -> bool:
-    """Writes one event to Postgres; returns False on failure, never raises. Bounded by a
-    connect timeout so a down Postgres degrades emission without stalling the workload."""
     global _schema_ready
     try:
         # a hard connect timeout keeps a slow/down Postgres from blocking the workload
