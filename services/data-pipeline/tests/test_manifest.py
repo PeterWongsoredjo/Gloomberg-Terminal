@@ -1,9 +1,10 @@
 from datetime import date, datetime, timezone
+from typing import Any
 
 from pipeline.bronze import manifest
 
 
-def _build(missing: list[str], expected: int) -> dict:
+def _build(missing: list[str], expected: int) -> dict[str, Any]:
     return manifest.build_manifest(
         ingest_run_id="RUN1",
         source="idx_summary",

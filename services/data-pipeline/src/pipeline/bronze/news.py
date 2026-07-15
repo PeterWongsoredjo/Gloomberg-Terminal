@@ -93,13 +93,18 @@ def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
     return out
 
 
-def normalize_from_bronze(minio: Minio, trade_date: date, settings: Settings) -> dict[str, Any]:
-    """Reads raw RSS for the date, normalizes and dedups items, lands them to news_rss/items."""
+def day_items(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
+    """Parses and dedups every raw RSS payload landed for the date."""
     seen: dict[str, dict[str, Any]] = {}
     for dataset, raw in _read_raw(minio, trade_date):
         for item in parse_rss(raw, dataset):
             seen.setdefault(item["item_id"], item)
-    items = sorted(seen.values(), key=lambda i: i["item_id"])
+    return sorted(seen.values(), key=lambda i: i["item_id"])
+
+
+def normalize_from_bronze(minio: Minio, trade_date: date, settings: Settings) -> dict[str, Any]:
+    """Reads raw RSS for the date, normalizes and dedups items, lands them to news_rss/items."""
+    items = day_items(minio, trade_date)
     payload = json.dumps(items, ensure_ascii=False).encode("utf-8")
     return land_payloads(
         minio,

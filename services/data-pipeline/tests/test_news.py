@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from pipeline.bronze.news import parse_rss
+from datetime import date
+from typing import TYPE_CHECKING, cast
+
+import pytest
+
+from pipeline.bronze import news
+from pipeline.bronze.news import day_items, parse_rss
+
+if TYPE_CHECKING:
+    from minio import Minio
 
 _RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -46,3 +55,13 @@ def test_parse_rss_stable_item_id() -> None:
 def test_parse_rss_bad_xml_returns_empty() -> None:
     """A payload that is not XML yields no items instead of raising."""
     assert parse_rss(b"not xml at all", "cnbc_market") == []
+
+
+def test_day_items_dedups_across_payloads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same payload landed twice yields each item exactly once, sorted."""
+    monkeypatch.setattr(
+        news, "_read_raw", lambda minio, td: [("cnbc_market", _RSS), ("cnbc_market", _RSS)]
+    )
+    items = day_items(cast("Minio", None), date(2026, 7, 3))
+    ids = [i["item_id"] for i in items]
+    assert len(ids) == 2 and ids == sorted(ids) and len(set(ids)) == 2
