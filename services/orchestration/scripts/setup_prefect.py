@@ -9,6 +9,10 @@ WORK_POOL = "gloomberg-local"
 TAG_LIMITS = {"duckdb_writer": 1, "minio_fetch": 3}
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 
+# our own prints echo the CLI's emoji, keep this console UTF-8 too
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+
 
 def _run(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(args))

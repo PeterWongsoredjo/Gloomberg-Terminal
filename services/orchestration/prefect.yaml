@@ -17,3 +17,13 @@ deployments:
         timezone: "Asia/Jakarta"
     parameters:
       objective: "daily_sentiment"
+
+  - name: gloomberg-intraday-news
+    entrypoint: src/orchestration/flow_intraday.py:intraday_news_flow
+    description: "In-session 15-minute news poll: land RSS, project new items, score intraday sentiment."
+    work_pool:
+      name: gloomberg-local
+    schedules:
+      - interval: 900              # the session guard makes off-hours ticks a cheap SKIP
+        anchor_date: "2026-01-01T09:00:00"
+        timezone: "Asia/Jakarta"
