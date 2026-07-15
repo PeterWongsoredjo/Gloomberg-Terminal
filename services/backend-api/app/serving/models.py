@@ -149,6 +149,7 @@ class InsightProvenance(_Model):
     provider: str
     model: str
     prompt_version: str
+    run_id: str | None
     trace_id: str | None
     generated_at: datetime
     loop_iterations: int | None
@@ -216,6 +217,18 @@ class PriceSeries(_Model):
 # --- news feed (additive) ---
 
 
+class NewsSentimentProvenance(_Model):
+    artifact_id: str
+    run_id: str | None
+    trace_id: str | None
+    provider: str | None
+    model: str | None
+    prompt_version: str | None
+    confidence: float | None
+    generated_at: datetime | None
+    evidence_item_ids: list[str]
+
+
 class NewsItem(_Model):
     item_id: str
     trade_date: date
@@ -226,6 +239,9 @@ class NewsItem(_Model):
     url: str
     published_at: datetime
     tickers: list[str]
+    sentiment_score: float | None
+    sentiment_label: str | None
+    sentiment_provenance: NewsSentimentProvenance | None
 
 
 class NewsFeedPage(_Model):

@@ -22,6 +22,7 @@ from app.agentic.deps import GraphDeps
 from app.agentic.tracing import NoopTracer
 from app.api.v1.deps import require_agentic
 from app.core.config import settings as core_settings
+from app.core.enums import SessionPhase
 from app.lifespan import AppState
 from app.main import app
 
@@ -110,7 +111,8 @@ async def test_post_launches_and_get_polls_to_terminal() -> None:
             body = await _poll_terminal(client, run_id)
             assert body["data"]["status"] == "SUCCEEDED"
             assert body["freshness_slo_met"] is True
-            assert body["market_state"] == "CLOSED"
+            # market_state tracks the wall clock, any real phase is valid here
+            assert body["market_state"] in {p.value for p in SessionPhase}
             assert body["data"]["objective"] == _OBJECTIVE
             assert body["data_as_of"] is not None
     finally:

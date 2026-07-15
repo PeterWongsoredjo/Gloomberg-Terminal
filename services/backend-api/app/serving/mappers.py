@@ -16,6 +16,7 @@ from app.serving.models import (
     MatrixCell,
     MatrixWindow,
     NewsItem,
+    NewsSentimentProvenance,
     PriceIntegrity,
     PriceLimit,
     SecurityRow,
@@ -145,6 +146,7 @@ def insight_panel(
             provider=fct["provider"],
             model=fct["model"],
             prompt_version=fct["prompt_version"],
+            run_id=_as_str((provenance or {}).get("run_id")),
             trace_id=(provenance or {}).get("trace_id"),
             generated_at=fct["generated_at"],
             loop_iterations=(provenance or {}).get("consumed_iterations"),
@@ -177,7 +179,14 @@ def candle(row: dict[str, Any]) -> Candle:
     )
 
 
-def news_item(row: dict[str, Any]) -> NewsItem:
+def news_item(
+    row: dict[str, Any],
+    sentiment_by_ticker: dict[str, dict[str, Any]] | None = None,
+    provenance_by_artifact: dict[str, dict[str, Any]] | None = None,
+) -> NewsItem:
+    """fct_news_item row plus the first tagged ticker's sentiment and its provenance, when known."""
+    tickers = list(row.get("tickers") or [])
+    sentiment = _first_ticker_sentiment(tickers, sentiment_by_ticker)
     return NewsItem(
         item_id=row["item_id"],
         trade_date=row["trade_date"],
@@ -187,7 +196,39 @@ def news_item(row: dict[str, Any]) -> NewsItem:
         summary=row.get("summary"),
         url=row["url"],
         published_at=row["published_at"],
-        tickers=list(row.get("tickers") or []),
+        tickers=tickers,
+        sentiment_score=_as_float(sentiment.get("sentiment_score")),
+        sentiment_label=_as_str(sentiment.get("sentiment_label")),
+        sentiment_provenance=_news_sentiment_provenance(sentiment, provenance_by_artifact),
+    )
+
+
+def _first_ticker_sentiment(
+    tickers: list[str], sentiment_by_ticker: dict[str, dict[str, Any]] | None
+) -> dict[str, Any]:
+    if not tickers or not sentiment_by_ticker:
+        return {}
+    return sentiment_by_ticker.get(tickers[0], {})
+
+
+def _news_sentiment_provenance(
+    sentiment: dict[str, Any], provenance_by_artifact: dict[str, dict[str, Any]] | None
+) -> NewsSentimentProvenance | None:
+    """Ties a headline's sentiment score to the run that produced it, run link null when off-ledger."""
+    artifact_id = _as_str(sentiment.get("artifact_id"))
+    if artifact_id is None:
+        return None
+    ledger = (provenance_by_artifact or {}).get(artifact_id, {})
+    return NewsSentimentProvenance(
+        artifact_id=artifact_id,
+        run_id=_as_str(ledger.get("run_id")),
+        trace_id=_as_str(ledger.get("trace_id")),
+        provider=_as_str(sentiment.get("provider")),
+        model=_as_str(sentiment.get("model")),
+        prompt_version=_as_str(sentiment.get("prompt_version")),
+        confidence=_as_float(sentiment.get("confidence")),
+        generated_at=sentiment.get("generated_at"),
+        evidence_item_ids=[str(i) for i in (sentiment.get("evidence_item_ids") or [])],
     )
 
 
@@ -220,6 +261,10 @@ def data_telemetry(row: dict[str, Any]) -> DataTelemetry:
 
 def _as_float(value: Any) -> float | None:
     return None if value is None else float(value)
+
+
+def _as_str(value: Any) -> str | None:
+    return None if value is None else str(value)
 
 
 def _as_json_list(value: Any) -> list[dict[str, object]]:

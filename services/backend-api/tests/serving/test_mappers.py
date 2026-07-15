@@ -66,13 +66,68 @@ def test_insight_status_reflects_degraded_and_low_confidence() -> None:
         "confidence": 0.4, "provider": "groq", "model": "m", "prompt_version": "ins-v1",
         "generated_at": datetime.now(UTC), "dq_flags": ["LLM_LOW_CONFIDENCE"],
     }
-    low = mappers.insight_panel(fct, {"trace_id": "t", "consumed_iterations": 2, "status": "SUCCEEDED"}, [])
+    low = mappers.insight_panel(
+        fct, {"run_id": "01JZX", "trace_id": "t", "consumed_iterations": 2, "status": "SUCCEEDED"}, []
+    )
     assert low.status is InsightStatus.LOW_CONFIDENCE
+    assert low.provenance.run_id == "01JZX"
     assert low.provenance.trace_id == "t"
     assert low.provenance.loop_iterations == 2
 
     degraded = mappers.insight_panel(fct, {"trace_id": None, "consumed_iterations": 1, "status": "DEGRADED"}, [])
     assert degraded.status is InsightStatus.DEGRADED
+    assert degraded.provenance.run_id is None
+
+
+def test_news_item_tags_first_ticker_sentiment() -> None:
+    row = {
+        "item_id": "n1", "trade_date": date(2026, 7, 3), "source": "KONTAN", "lang": "id",
+        "title": "t", "summary": None, "url": "https://x", "published_at": datetime.now(UTC),
+        "tickers": ["BBCA", "BMRI"],
+    }
+    sentiment = {"BBCA": {"sentiment_score": 0.4, "sentiment_label": "BULLISH"}}
+    item = mappers.news_item(row, sentiment)
+    assert item.sentiment_score == 0.4
+    assert item.sentiment_label == "BULLISH"
+
+    # no tagged ticker or no sentiment row stays null, never zero
+    bare = mappers.news_item({**row, "tickers": []}, sentiment)
+    assert bare.sentiment_score is None
+    assert bare.sentiment_label is None
+    assert bare.sentiment_provenance is None
+
+
+def test_news_item_carries_sentiment_provenance() -> None:
+    row = {
+        "item_id": "n1", "trade_date": date(2026, 7, 3), "source": "KONTAN", "lang": "id",
+        "title": "t", "summary": None, "url": "https://x", "published_at": datetime.now(UTC),
+        "tickers": ["BBRI"],
+    }
+    sentiment = {
+        "BBRI": {
+            "sentiment_score": -0.38, "sentiment_label": "BEARISH", "confidence": 0.7,
+            "artifact_id": "art-1", "provider": "gemini", "model": "gemini-2.5-flash-lite",
+            "prompt_version": "sent-v4", "generated_at": datetime.now(UTC),
+            "evidence_item_ids": ["n1", "n2"],
+        }
+    }
+    provenance = {"art-1": {"run_id": "run-9", "trace_id": "tr-9"}}
+    item = mappers.news_item(row, sentiment, provenance)
+    prov = item.sentiment_provenance
+    assert prov is not None
+    assert prov.artifact_id == "art-1"
+    assert prov.run_id == "run-9"
+    assert prov.trace_id == "tr-9"
+    assert prov.provider == "gemini"
+    assert prov.evidence_item_ids == ["n1", "n2"]
+
+    # fail-open: no ledger row means score/provider still set, run link null
+    off_ledger = mappers.news_item(row, sentiment, {})
+    assert off_ledger.sentiment_provenance is not None
+    assert off_ledger.sentiment_provenance.run_id is None
+    assert off_ledger.sentiment_provenance.trace_id is None
+    assert off_ledger.sentiment_provenance.provider == "gemini"
+    assert off_ledger.sentiment_score == -0.38
 
 
 def test_data_telemetry_parses_json_columns() -> None:

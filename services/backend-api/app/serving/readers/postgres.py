@@ -5,6 +5,7 @@ Read-only Postgres access to the agg_* projections and the agentic ledger.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import asyncpg
@@ -47,14 +48,61 @@ class ServingPostgresReader:
     async def sentiment_for(self, ticker: str) -> dict[str, Any] | None:
         return await self._fetchrow('select * from public."agg_sentiment_matrix" where ticker = $1', ticker)
 
+    async def intraday_news(self, limit: int, before: tuple[datetime, str] | None) -> list[dict[str, Any]]:
+        """Freshly polled headlines not yet in Gold, same cursor shape as the Gold read."""
+        if before is None:
+            sql = """
+                select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
+                from intraday.news_item
+                order by published_at desc, item_id desc
+                limit $1
+            """
+            return await self._fetch(sql, limit)
+        sql = """
+            select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
+            from intraday.news_item
+            where published_at < $1 or (published_at = $1 and item_id < $2)
+            order by published_at desc, item_id desc
+            limit $3
+        """
+        return await self._fetch(sql, before[0], before[1], limit)
+
+    async def latest_intraday_sentiment(self, tickers: list[str]) -> dict[str, dict[str, Any]]:
+        """The newest in-session sentiment row per ticker, shaped like the Gold read."""
+        if not tickers:
+            return {}
+        sql = """
+            select distinct on (ticker)
+                   ticker, sentiment_score, sentiment_label, confidence, artifact_id,
+                   provider, model, prompt_version, generated_at, evidence_item_ids
+            from intraday.sentiment
+            where ticker = any($1)
+            order by ticker, generated_at desc
+        """
+        rows = await self._fetch(sql, tickers)
+        return {str(r["ticker"]): r for r in rows}
+
     async def insight_provenance(self, artifact_id: str) -> dict[str, Any] | None:
         sql = """
-            select r.trace_id, r.consumed_iterations, r.status
+            select r.run_id, r.trace_id, r.consumed_iterations, r.status
             from agentic.agent_artifact a
             join agentic.agent_run r on a.run_id = r.run_id
             where a.artifact_id = $1
         """
         return await self._fetchrow(sql, artifact_id)
+
+    async def artifact_provenance(self, artifact_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Run and trace ids for a batch of artifacts, keyed by artifact_id."""
+        if not artifact_ids:
+            return {}
+        sql = """
+            select a.artifact_id, r.run_id, r.trace_id
+            from agentic.agent_artifact a
+            join agentic.agent_run r on a.run_id = r.run_id
+            where a.artifact_id = any($1)
+        """
+        rows = await self._fetch(sql, artifact_ids)
+        return {str(r["artifact_id"]): r for r in rows}
 
     async def run(self, run_id: str) -> dict[str, Any] | None:
         sql = """

@@ -5,6 +5,7 @@ Read-only DuckDB Gold access for facts not projected to Postgres.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from typing import Any
 
 import duckdb
@@ -52,23 +53,45 @@ class ServingGoldReader:
         rows = await self._safe(sql, [ticker, limit_days])
         return list(reversed(rows))
 
-    async def news(self, limit: int, before: str | None) -> list[dict[str, Any]]:
+    async def news(self, limit: int, before: tuple[datetime, str] | None) -> list[dict[str, Any]]:
         """Newest headlines, optionally paged behind a (published_at, item_id) cursor."""
         params: list[Any] = []
         clause = ""
         if before is not None:
-            clause = "where (published_at || '|' || item_id) < ?"
-            params.append(before)
+            # gold stores naive UTC timestamps, so compare against a naive value
+            clause = "where published_at < ? or (published_at = ? and item_id < ?)"
+            naive = before[0].replace(tzinfo=None)
+            params.extend([naive, naive, before[1]])
         params.append(limit)
         sql = f"""
-            select item_id, trade_date, source, lang, title, summary, url, published_at, tickers,
-                   (published_at || '|' || item_id) as _cursor
+            select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
             from fct_news_item
             {clause}
             order by published_at desc, item_id desc
             limit ?
         """
         return await self._safe(sql, params)
+
+    async def latest_sentiment(self, tickers: list[str]) -> dict[str, dict[str, Any]]:
+        """The newest sentiment row per ticker, with its provenance, for tagging headlines."""
+        if not tickers:
+            return {}
+        sql = """
+            select ticker, sentiment_score, sentiment_label, confidence, artifact_id,
+                   provider, model, prompt_version, generated_at, evidence_item_ids
+            from (
+                select ticker, sentiment_score, sentiment_label, confidence, artifact_id,
+                       provider, model, prompt_version, generated_at, evidence_item_ids,
+                       row_number() over (
+                           partition by ticker order by trade_date desc, generated_at desc
+                       ) as _rn
+                from fct_sentiment
+                where list_contains(?::varchar[], ticker)
+            )
+            where _rn = 1
+        """
+        rows = await self._safe(sql, [tickers])
+        return {str(r["ticker"]): r for r in rows}
 
     async def insight(self, ticker: str) -> dict[str, Any] | None:
         sql = """
