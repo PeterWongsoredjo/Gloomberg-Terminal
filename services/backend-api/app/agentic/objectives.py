@@ -25,6 +25,9 @@ OBJECTIVES: dict[str, ObjectiveSpec] = {
     "daily_sentiment": ObjectiveSpec(
         "daily_sentiment", "SENTIMENT", SentimentValue, ("groq", "gemini"), "sentiment_analyze", "sentiment_confidence_gate"
     ),
+    "intraday_sentiment": ObjectiveSpec(
+        "intraday_sentiment", "SENTIMENT", SentimentValue, ("groq", "gemini"), "sentiment_analyze", "sentiment_confidence_gate"
+    ),
     "deep_extraction": ObjectiveSpec(
         "deep_extraction", "EXTRACTION", ExtractionValue, ("gemini", "groq"), "deep_extract", "extraction_confidence_gate"
     ),
@@ -33,7 +36,10 @@ OBJECTIVES: dict[str, ObjectiveSpec] = {
     ),
 }
 
-_BY_TYPE: dict[str, ObjectiveSpec] = {spec.artifact_type: spec for spec in OBJECTIVES.values()}
+# first objective declared for a type stays its canonical spec
+_BY_TYPE: dict[str, ObjectiveSpec] = {}
+for _spec in OBJECTIVES.values():
+    _BY_TYPE.setdefault(_spec.artifact_type, _spec)
 
 
 def spec_for(objective: str) -> ObjectiveSpec:

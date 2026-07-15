@@ -9,6 +9,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 
 from app.agentic.deps import GraphDeps
+from app.agentic.objectives import spec_for
 
 # prescriptive language the non-advisory gate rejects, in English and Indonesian
 _ADVICE = re.compile(
@@ -48,9 +49,10 @@ def user_payload(payload: dict[str, Any]) -> str:
 
 def value_confidence(objective: str, value: dict[str, Any]) -> float:
     """The artifact-level confidence for an objective's value block."""
-    if objective == "daily_sentiment":
+    kind = spec_for(objective).artifact_type
+    if kind == "SENTIMENT":
         return float(value.get("self_confidence", 0.0))
-    if objective == "insight_synthesis":
+    if kind == "INSIGHT":
         return float(value.get("confidence", 0.0))
     events = value.get("events") or []
     return min((float(e.get("confidence", 0.0)) for e in events), default=0.4)

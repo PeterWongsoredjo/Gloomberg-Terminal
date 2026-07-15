@@ -12,6 +12,7 @@ from langchain_core.runnables import RunnableConfig
 
 from app.agentic.budget import iterations_left, tokens_left
 from app.agentic.nodes._common import contains_advice, get_deps, value_confidence
+from app.agentic.objectives import spec_for
 from app.agentic.state import AgentState
 
 _PRICE_DROP = re.compile(r"crash|plunge|anjlok|jatuh|merosot|tumbang|sell-?off|collaps", re.IGNORECASE)
@@ -29,18 +30,20 @@ def _corp_action_tickers(state: AgentState) -> set[str]:
 def _grounded(objective: str, draft: dict[str, Any]) -> bool:
     """Whether the draft cites only supplied evidence for its objective."""
     value = draft["value"]
-    if objective == "daily_sentiment":
+    kind = spec_for(objective).artifact_type
+    if kind == "SENTIMENT":
         return set(value.get("evidence_item_ids", [])).issubset(set(draft["evidence_pool"]))
-    if objective == "deep_extraction":
+    if kind == "EXTRACTION":
         return all((e.get("source_span") or "").strip() for e in value.get("events", []))
     return True
 
 
 def _advisory_text(objective: str, value: dict[str, Any]) -> str:
     """The textual fields the non-advisory gate scans for an objective."""
-    if objective == "daily_sentiment":
+    kind = spec_for(objective).artifact_type
+    if kind == "SENTIMENT":
         return " ".join(value.get("drivers", []))
-    if objective == "insight_synthesis":
+    if kind == "INSIGHT":
         signals = " ".join(str(s.get("value", "")) for s in value.get("signals", []))
         return f"{value.get('headline', '')} {value.get('narrative', '')} {signals}"
     return " ".join((e.get("source_span") or "") for e in value.get("events", []))
@@ -48,7 +51,7 @@ def _advisory_text(objective: str, value: dict[str, Any]) -> str:
 
 def _context_consistent(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> bool:
     """A bearish read on a corporate-action move is a context contradiction."""
-    if objective != "daily_sentiment":
+    if spec_for(objective).artifact_type != "SENTIMENT":
         return True
     value = draft["value"]
     ticker = str(draft["subject"].get("ticker"))

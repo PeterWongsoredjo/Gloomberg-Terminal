@@ -7,7 +7,7 @@ from __future__ import annotations
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 
-Objective = Literal["daily_sentiment", "deep_extraction", "insight_synthesis"]
+Objective = Literal["daily_sentiment", "intraday_sentiment", "deep_extraction", "insight_synthesis"]
 RunStatus = Literal["RUNNING", "SUCCEEDED", "DEGRADED", "ABORTED"]
 
 
