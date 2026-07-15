@@ -6,11 +6,11 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.v1.deps import anchor_trade_date, get_app_state
+from app.api.v1.deps import get_app_state
 from app.core.enums import QualityFlag
 from app.core.envelope import Envelope
 from app.lifespan import AppState
-from app.observability.rollup import read_rollup
+from app.observability.rollup import read_latest_rollup, read_rollup
 from app.serving import mappers
 from app.serving.envelope import build_envelope
 from app.serving.models import DataTelemetry
@@ -29,12 +29,16 @@ async def get_data_telemetry(
     if app_state.pg_pool is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="telemetry store unavailable")
 
-    resolved = trade_date or await anchor_trade_date(app_state)
-    row = await read_rollup(app_state.pg_pool, resolved)
+    row = (
+        await read_rollup(app_state.pg_pool, trade_date)
+        if trade_date is not None
+        else await read_latest_rollup(app_state.pg_pool)
+    )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no telemetry for trade_date")
 
     record = dict(row)
+    resolved = record["trade_date"]
     telemetry = mappers.data_telemetry(record)
     # the rollup self-evaluates its SLOs and the panel renders them, so the envelope stays fresh
     return build_envelope(

@@ -340,6 +340,11 @@ async def read_rollup(pool: asyncpg.Pool, trade_date: date) -> asyncpg.Record | 
     return await pool.fetchrow("select * from observability.obs_telemetry_rollup where trade_date = $1", trade_date)
 
 
+async def read_latest_rollup(pool: asyncpg.Pool) -> asyncpg.Record | None:
+    """The newest published rollup, whatever its trade_date."""
+    return await pool.fetchrow("select * from observability.obs_telemetry_rollup order by trade_date desc limit 1")
+
+
 def _array_len(value: Any) -> int:
     return len(_as_list(value))
 
