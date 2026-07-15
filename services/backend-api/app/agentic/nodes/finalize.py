@@ -7,11 +7,13 @@ Finalize is the main coordinator node for the cleanup phase. It:
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
+import asyncpg
 from langchain_core.runnables import RunnableConfig
 
-from app.agentic import cache, ledger
+from app.agentic import cache, intraday, ledger
 from app.agentic.config import AgenticSettings
 from app.agentic.confidence import apply_gate
 from app.agentic.deps import GraphDeps
@@ -29,6 +31,18 @@ from app.agentic.schemas import (
     Window,
 )
 from app.agentic.state import AgentState
+
+logger = logging.getLogger(__name__)
+
+
+async def _project_intraday(deps: GraphDeps, state: AgentState, artifacts: list[dict[str, Any]]) -> None:
+    """Lands intraday scores in the projection, items retry next poll on failure."""
+    if state["objective"] != "intraday_sentiment" or deps.pg_pool is None:
+        return
+    try:
+        await intraday.project(deps.pg_pool, state, artifacts)
+    except asyncpg.PostgresError:
+        logger.warning("intraday projection write failed for run %s", state["run_id"], exc_info=True)
 
 
 def _build_artifact(draft: dict[str, Any], state: AgentState, settings: AgenticSettings) -> Ct009Artifact:
@@ -98,6 +112,7 @@ async def finalize(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         span.set_output({"artifacts": total, "status": status})
 
         await _persist(deps, state, new_dicts)
+        await _project_intraday(deps, state, [*state.get("artifacts", []), *new_dicts])
         await _record_health(deps)
         if deps.pg_pool is not None:
             await ledger.finish_run(

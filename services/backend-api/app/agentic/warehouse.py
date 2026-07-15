@@ -68,6 +68,12 @@ class GoldReader:
         """
         return await self._rows(sql, [*universe, trade_date, trade_date])
 
+    async def latest_trade_date(self) -> str | None:
+        """The newest published trading day, for anchoring intraday context."""
+        rows = await self._rows("select max(trade_date) as trade_date from fct_daily_trade", [])
+        value = rows[0]["trade_date"] if rows else None
+        return str(value) if value is not None else None
+
     async def news_items(self, trade_date: str) -> list[dict[str, Any]]:
         sql = """
             select item_id, trade_date, source, lang, title, summary, url,

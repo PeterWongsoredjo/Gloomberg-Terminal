@@ -9,12 +9,26 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from app.agentic import cache
+from app.agentic import cache, intraday
+from app.agentic.deps import GraphDeps
 from app.agentic.nodes._common import get_deps
 from app.agentic.prompts.registry import get_prompt
 from app.agentic.resolver import EntityResolver
 from app.agentic.state import AgentState
 from app.agentic.warehouse import GoldReader
+
+
+async def _news_for(
+    deps: GraphDeps, gold: GoldReader, objective: str, trade_date: str
+) -> list[dict[str, Any]]:
+    """Intraday reads the unscored poll backlog, everything else reads Gold."""
+    if objective != "intraday_sentiment":
+        return await gold.news_items(trade_date)
+    if deps.pg_pool is None:
+        return []
+    return await intraday.unscored_items(
+        deps.pg_pool, trade_date, deps.settings.intraday_max_score_attempts
+    )
 
 
 async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -25,11 +39,15 @@ async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str,
 
     async with deps.tracer.span("ingest_context", state["run_id"], {"objective": objective}):
         resolver, news = await asyncio.gather(
-            EntityResolver.from_gold(gold), gold.news_items(trade_date)
+            EntityResolver.from_gold(gold), _news_for(deps, gold, objective, trade_date)
         )
         known = resolver.resolve(state["subject_universe"]).resolved
+        market_date = trade_date
+        if objective == "intraday_sentiment":
+            # today's Gold is unbuilt in session, anchor prices to the last snapshot
+            market_date = await gold.latest_trade_date() or trade_date
         market, corporate_actions = await asyncio.gather(
-            gold.market_context(trade_date, known), gold.corporate_actions(known, trade_date)
+            gold.market_context(market_date, known), gold.corporate_actions(known, trade_date)
         )
     context = {"news_items": news, "market_context": market, "corporate_actions": corporate_actions}
 

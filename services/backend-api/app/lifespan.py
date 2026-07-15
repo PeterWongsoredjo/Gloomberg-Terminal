@@ -14,7 +14,7 @@ import httpx
 from fastapi import FastAPI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-from app.agentic import ledger
+from app.agentic import intraday, ledger
 from app.agentic.bootstrap import build_deps, build_llm_clients, build_slots
 from app.agentic.config import AgenticSettings, get_agentic_settings
 from app.agentic.deps import GraphDeps
@@ -115,6 +115,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[dict[str, AppState]]:
         if pg_pool is not None:
             stack.push_async_callback(pg_pool.close)
             await ledger.setup(pg_pool)
+            await intraday.setup(pg_pool)
             await rollup.setup(pg_pool)
             await lifecycle.setup(pg_pool)
             await _seed_quota(pg_pool, quota)

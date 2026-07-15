@@ -1,0 +1,289 @@
+"""The intraday sentiment path: objective wiring, evaluator re-keying, and the
+projection lifecycle over a live Postgres (skipped when the container is down)."""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any, cast
+
+import asyncpg
+import pytest
+
+from collections.abc import Callable
+
+from app.agentic import intraday
+from app.agentic.config import get_agentic_settings
+from app.agentic.deps import GraphDeps
+from app.agentic.graph import build_graph
+from app.agentic.nodes import ingest_context as ingest_context_mod
+from app.agentic.nodes._common import value_confidence
+from app.agentic.nodes.evaluate import _advisory_text, _grounded
+from app.agentic.objectives import spec_for, spec_for_type
+from app.agentic.prompts.registry import get_prompt
+from app.agentic.runner import run_agentic
+from app.agentic.state import AgentState
+from app.agentic.warehouse import GoldReader
+
+from .conftest import ScriptedProvider, make_slot, sentiment_response
+
+_TD = "2026-07-14"
+_PREFIX = "testintr:"
+
+
+# --- pure wiring ---
+
+
+def test_intraday_spec_reuses_the_sentiment_node() -> None:
+    spec = spec_for("intraday_sentiment")
+    assert spec.artifact_type == "SENTIMENT"
+    assert spec.node_name == "sentiment_analyze"
+    assert spec.gate_attr == "sentiment_confidence_gate"
+    assert spec.ladder == ("groq", "gemini")
+
+
+def test_sentiment_type_stays_pinned_to_daily() -> None:
+    assert spec_for_type("SENTIMENT").objective == "daily_sentiment"
+
+
+def test_intraday_prompt_is_registered() -> None:
+    prompt = get_prompt("intraday_sentiment")
+    assert prompt.version == "sent-intraday-v1"
+    assert "NON-ADVISORY" in prompt.system_contract
+
+
+def test_value_confidence_rekeys_by_artifact_type() -> None:
+    assert value_confidence("intraday_sentiment", {"self_confidence": 0.9}) == 0.9
+
+
+def test_grounding_enforced_for_intraday_drafts() -> None:
+    draft = {"value": {"evidence_item_ids": ["outside"]}, "evidence_pool": ["inside"]}
+    assert _grounded("intraday_sentiment", draft) is False
+    draft_ok = {"value": {"evidence_item_ids": ["inside"]}, "evidence_pool": ["inside"]}
+    assert _grounded("intraday_sentiment", draft_ok) is True
+
+
+def test_advisory_gate_scans_intraday_drivers() -> None:
+    assert _advisory_text("intraday_sentiment", {"drivers": ["laba naik", "cuan"]}) == "laba naik cuan"
+
+
+# --- offline graph run over a fake backlog ---
+
+
+async def test_intraday_run_scores_the_supplied_backlog(
+    deps_factory: Callable[..., GraphDeps], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The intraday objective routes through the sentiment node over polled items."""
+    backlog = [
+        {
+            "item_id": "poll:1",
+            "trade_date": "2026-07-03",
+            "source": "cnbc_market",
+            "lang": "id",
+            "title": "BBCA cetak laba",
+            "summary": "laba naik",
+            "url": "http://x",
+            "published_at": "2026-07-03T03:00:00+00:00",
+            "tickers": ["BBCA"],
+        }
+    ]
+
+    async def fake_news(
+        deps: GraphDeps, gold: GoldReader, objective: str, trade_date: str
+    ) -> list[dict[str, Any]]:
+        return backlog if objective == "intraday_sentiment" else []
+
+    monkeypatch.setattr(ingest_context_mod, "_news_for", fake_news)
+    slots = {"groq": make_slot(ScriptedProvider("groq", lambda _r: sentiment_response(evidence=["poll:1"])))}
+    deps = deps_factory(slots)
+    final = await run_agentic(
+        build_graph(None), deps, objective="intraday_sentiment", trade_date="2026-07-03", universe=["BBCA"]
+    )
+    assert final["status"] == "SUCCEEDED"
+    assert len(final["artifacts"]) == 1
+    artifact = final["artifacts"][0]
+    assert artifact["subject"]["ticker"] == "BBCA"
+    assert artifact["value"]["evidence_item_ids"] == ["poll:1"]
+    assert artifact["provenance"]["prompt_version"] == "sent-intraday-v1"
+
+
+# --- live-gated projection lifecycle ---
+
+_ITEM_DDL = """
+create schema if not exists intraday;
+create table if not exists intraday.news_item (
+    item_id text primary key,
+    trade_date date not null,
+    source text not null,
+    lang text,
+    title text not null,
+    summary text,
+    url text not null,
+    published_at timestamptz not null,
+    tickers text[] not null default '{}',
+    ingest_run_id text,
+    first_seen_at timestamptz not null default now(),
+    score_attempts int not null default 0,
+    last_attempt_run_id text,
+    scored_at timestamptz,
+    scored_run_id text
+);
+"""
+
+
+async def _pool_or_skip() -> asyncpg.Pool:
+    try:
+        pool = await asyncpg.create_pool(get_agentic_settings().postgres_dsn, min_size=1, max_size=2)
+    except (OSError, asyncpg.PostgresError) as exc:
+        pytest.skip(f"postgres unavailable: {exc}")
+    await pool.execute(_ITEM_DDL)
+    await intraday.setup(pool)
+    return pool
+
+
+async def _purge(pool: asyncpg.Pool) -> None:
+    await pool.execute("delete from intraday.news_item where item_id like $1", f"{_PREFIX}%")
+    await pool.execute("delete from intraday.sentiment where run_id like $1", f"{_PREFIX}%")
+
+
+async def _seed_item(pool: asyncpg.Pool, suffix: str, attempts: int = 0) -> str:
+    item_id = f"{_PREFIX}{suffix}"
+    await pool.execute(
+        """
+        insert into intraday.news_item
+            (item_id, trade_date, source, title, url, published_at, tickers, score_attempts)
+        values ($1, $2, 'cnbc_market', 'judul', 'http://x', now(), array['BBCA'], $3)
+        on conflict (item_id) do nothing
+        """,
+        item_id,
+        date.fromisoformat(_TD),
+        attempts,
+    )
+    return item_id
+
+
+def _state(run_id: str, item_ids: list[str]) -> AgentState:
+    news = [{"item_id": i} for i in item_ids]
+    return cast(
+        AgentState,
+        {
+            "run_id": run_id,
+            "objective": "intraday_sentiment",
+            "trade_date": _TD,
+            "trace_id": "trace-1",
+            "context": {"news_items": news, "market_context": [], "corporate_actions": []},
+        },
+    )
+
+
+def _artifact(
+    item_ids: list[str],
+    generated_at: str = "2026-07-14T04:00:00+00:00",
+    artifact_id: str = f"{_PREFIX}art-1",
+) -> dict[str, Any]:
+    return {
+        "artifact_id": artifact_id,
+        "artifact_type": "SENTIMENT",
+        "subject": {"security_id": 1001, "ticker": "BBCA"},
+        "value": {
+            "sentiment_score": -0.4,
+            "sentiment_label": "BEARISH",
+            "drivers": ["asing jual"],
+            "evidence_item_ids": item_ids[:1],
+            "self_confidence": 0.7,
+        },
+        "confidence": 0.7,
+        "quality_flags": [],
+        "provenance": {
+            "provider": "groq",
+            "model": "fake-model",
+            "prompt_version": "sent-intraday-v1",
+            "generated_at": generated_at,
+            "input_source_refs": item_ids,
+        },
+    }
+
+
+async def test_unscored_items_returns_seeded_rows() -> None:
+    pool = await _pool_or_skip()
+    try:
+        item_id = await _seed_item(pool, "u1")
+        rows = await intraday.unscored_items(pool, _TD, max_attempts=3)
+        ours = [r for r in rows if r["item_id"] == item_id]
+        assert len(ours) == 1
+        assert ours[0]["tickers"] == ["BBCA"]
+    finally:
+        await _purge(pool)
+        await pool.close()
+
+
+async def test_project_scores_items_and_lands_sentiment() -> None:
+    pool = await _pool_or_skip()
+    run_id = f"{_PREFIX}run1"
+    try:
+        ids = [await _seed_item(pool, "s1"), await _seed_item(pool, "s2")]
+        await intraday.project(pool, _state(run_id, ids), [_artifact(ids)])
+
+        row = await pool.fetchrow(
+            "select * from intraday.sentiment where run_id = $1 and ticker = 'BBCA'", run_id
+        )
+        assert row is not None
+        assert row["trace_id"] == "trace-1"
+        assert row["sentiment_label"] == "BEARISH"
+        assert list(row["evidence_item_ids"]) == ids[:1]
+
+        items = await pool.fetch(
+            "select scored_at, score_attempts from intraday.news_item where item_id = any($1)", ids
+        )
+        assert all(i["scored_at"] is not None and i["score_attempts"] == 1 for i in items)
+        remaining = await intraday.unscored_items(pool, _TD, max_attempts=3)
+        assert not [r for r in remaining if r["item_id"] in ids]
+    finally:
+        await _purge(pool)
+        await pool.close()
+
+
+async def test_degraded_run_bumps_attempts_without_scoring() -> None:
+    pool = await _pool_or_skip()
+    try:
+        item_id = await _seed_item(pool, "d1")
+        await intraday.project(pool, _state(f"{_PREFIX}run2", [item_id]), [])
+        row = await pool.fetchrow(
+            "select scored_at, score_attempts, last_attempt_run_id "
+            "from intraday.news_item where item_id = $1",
+            item_id,
+        )
+        assert row is not None
+        assert row["scored_at"] is None and row["score_attempts"] == 1
+        assert row["last_attempt_run_id"] == f"{_PREFIX}run2"
+    finally:
+        await _purge(pool)
+        await pool.close()
+
+
+async def test_exhausted_attempts_drop_out_of_the_backlog() -> None:
+    pool = await _pool_or_skip()
+    try:
+        item_id = await _seed_item(pool, "x1", attempts=3)
+        rows = await intraday.unscored_items(pool, _TD, max_attempts=3)
+        assert not [r for r in rows if r["item_id"] == item_id]
+    finally:
+        await _purge(pool)
+        await pool.close()
+
+
+async def test_projection_upsert_is_freshest_wins() -> None:
+    pool = await _pool_or_skip()
+    run_id = f"{_PREFIX}run3"
+    try:
+        ids = [await _seed_item(pool, "f1")]
+        newer = _artifact(ids, generated_at="2026-07-14T06:00:00+00:00", artifact_id=f"{_PREFIX}new")
+        older = _artifact(ids, generated_at="2026-07-14T05:00:00+00:00", artifact_id=f"{_PREFIX}old")
+        await intraday.project(pool, _state(run_id, ids), [newer])
+        await intraday.project(pool, _state(run_id, ids), [older])
+        row = await pool.fetchrow(
+            "select artifact_id from intraday.sentiment where run_id = $1 and ticker = 'BBCA'", run_id
+        )
+        assert row is not None and row["artifact_id"] == newer["artifact_id"]
+    finally:
+        await _purge(pool)
+        await pool.close()

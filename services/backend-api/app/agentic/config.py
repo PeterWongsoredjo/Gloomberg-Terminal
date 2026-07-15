@@ -48,6 +48,9 @@ class AgenticSettings(BaseSettings):
     breaker_window_seconds: float = 60.0
     breaker_cooldown_seconds: float = 120.0
 
+    # intraday scoring gives up on an item after this many runs
+    intraday_max_score_attempts: int = 3
+
     # cache
     cache_ttl_hours: int = 20
     cache_staleness_budget_hours: int = 48

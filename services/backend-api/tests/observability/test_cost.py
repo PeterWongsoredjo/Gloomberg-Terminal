@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 
+from app.agentic.providers.base import ProviderRequest
 from app.agentic.providers.ladder import AllProvidersDown, ProviderLadder
 from app.observability.cost import QuotaTracker, get_cost_model
 from tests.agentic.conftest import ScriptedProvider, make_slot, sentiment_response
@@ -62,8 +63,7 @@ def test_ladder_raises_when_all_providers_are_quota_exhausted() -> None:
         asyncio.run(ladder.complete(_request()))
 
 
-def _request() -> object:
-    from app.agentic.providers.base import ProviderRequest
+def _request() -> ProviderRequest:
     from app.agentic.schemas import SentimentValue
 
     return ProviderRequest(
