@@ -6,14 +6,26 @@ this file dictates that our prefect only runs on days where ihsg is open
 from __future__ import annotations
 
 import csv
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import NamedTuple
+
+import yaml
+
+# the phases during which the intraday poller is allowed to run
+OPEN_SESSIONS = frozenset({"SESSION_1", "SESSION_2"})
 
 
 class _Override(NamedTuple):
     is_trading: bool
     reason: str
+    template: str
+
+
+class SessionWindow(NamedTuple):
+    start: time
+    end: time
+    phase: str
 
 
 def _load_overrides(calendar_seed: Path) -> dict[date, _Override]:
@@ -25,7 +37,8 @@ def _load_overrides(calendar_seed: Path) -> dict[date, _Override]:
         for row in csv.DictReader(handle):
             day = date.fromisoformat(row["trade_date"].strip())
             is_trading = row["is_trading_day"].strip().lower() == "true"
-            overrides[day] = _Override(is_trading, row.get("holiday_reason", "").strip())
+            template = (row.get("session_template") or "").strip() or "NORMAL"
+            overrides[day] = _Override(is_trading, row.get("holiday_reason", "").strip(), template)
     return overrides
 
 
@@ -41,3 +54,42 @@ def holiday_reason(day: date, calendar_seed: Path) -> str:
         return "weekend"
     override = _load_overrides(calendar_seed).get(day)
     return (override.reason if override else "") or "non-trading day"
+
+
+def session_template_name(day: date, calendar_seed: Path) -> str:
+    """The session template the calendar assigns this day, NORMAL by default."""
+    override = _load_overrides(calendar_seed).get(day)
+    return override.template if override else "NORMAL"
+
+
+def load_session_windows(path: Path) -> tuple[int, dict[str, list[SessionWindow]]] | None:
+    """Reads the WIB offset and phase windows per template, None when unreadable."""
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        offset = int(doc["timezone_offset_hours"])
+        templates: dict[str, list[SessionWindow]] = {}
+        for name, spec in doc["templates"].items():
+            windows = [
+                SessionWindow(time.fromisoformat(start), time.fromisoformat(end), str(phase))
+                for start, end, phase in spec["phases"]
+            ]
+            templates[str(name)] = windows
+        return offset, templates
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError):
+        return None
+
+
+def session_phase(day: date, now: datetime, calendar_seed: Path, windows_path: Path) -> str | None:
+    """The market phase at a UTC instant, None when config cannot be resolved."""
+    loaded = load_session_windows(windows_path)
+    if loaded is None:
+        return None
+    offset, templates = loaded
+    windows = templates.get(session_template_name(day, calendar_seed))
+    if windows is None:
+        return None
+    local = (now + timedelta(hours=offset)).time()
+    for window in windows:
+        if window.start <= local < window.end:
+            return window.phase
+    return "CLOSED"

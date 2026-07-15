@@ -22,6 +22,14 @@ def test_launch_accepts_202_and_returns_run_id() -> None:
     assert _client(handler).launch("daily_sentiment", TD, ["BBCA"]) == "RUN123"
 
 
+def test_launch_intraday_objective_keys_its_own_idempotency() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Idempotency-Key"] == "intraday_sentiment:2026-07-03"
+        return httpx.Response(202, json={"run_id": "RUN456"})
+
+    assert _client(handler).launch("intraday_sentiment", TD, ["BBCA"]) == "RUN456"
+
+
 def test_launch_treats_409_as_idempotent_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(409, json={"run_id": "RUN_EXISTING"})

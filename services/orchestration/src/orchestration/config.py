@@ -26,6 +26,9 @@ class OrchestrationConfig:
     trigger_timeout_seconds: float
     eod_cron: str
     objective: str
+    session_windows: Path = REPO_ROOT / "services" / "backend-api" / "app" / "observability" / "config" / "session_windows.yaml"
+    intraday_objective: str = "intraday_sentiment"
+    intraday_universe_cap: int = 16
     subject_universe: list[str] = field(default_factory=lambda: list(DEFAULT_UNIVERSE))
 
 
@@ -54,5 +57,16 @@ def get_config() -> OrchestrationConfig:
         trigger_timeout_seconds=float(os.environ.get("GLOOMBERG_ORCH_TRIGGER_TIMEOUT", "10")),
         eod_cron=os.environ.get("GLOOMBERG_ORCH_EOD_CRON", "0 17 * * 1-5"),
         objective=os.environ.get("GLOOMBERG_ORCH_OBJECTIVE", "daily_sentiment"),
+        session_windows=Path(
+            os.environ.get(
+                "GLOOMBERG_ORCH_SESSION_WINDOWS",
+                str(
+                    REPO_ROOT / "services" / "backend-api" / "app"
+                    / "observability" / "config" / "session_windows.yaml"
+                ),
+            )
+        ),
+        intraday_objective=os.environ.get("GLOOMBERG_ORCH_INTRADAY_OBJECTIVE", "intraday_sentiment"),
+        intraday_universe_cap=int(os.environ.get("GLOOMBERG_ORCH_INTRADAY_UNIVERSE_CAP", "16")),
         subject_universe=_universe(),
     )

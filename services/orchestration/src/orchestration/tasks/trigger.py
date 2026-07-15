@@ -100,10 +100,27 @@ class TriggerClient:
     retry_condition_fn=retry_on_transient_trigger,
 )
 def trigger_agentic(trade_date: date, config: OrchestrationConfig) -> PhaseResult:
+    return _launch_and_poll(config, config.objective, trade_date, config.subject_universe)
+
+
+@task(
+    name="trigger_intraday",
+    retries=TRIGGER_RETRIES,
+    retry_delay_seconds=TRIGGER_BACKOFF,
+    retry_jitter_factor=TRIGGER_JITTER,
+    retry_condition_fn=retry_on_transient_trigger,
+)
+def trigger_intraday(trade_date: date, tickers: list[str], config: OrchestrationConfig) -> PhaseResult:
+    return _launch_and_poll(config, config.intraday_objective, trade_date, tickers)
+
+
+def _launch_and_poll(
+    config: OrchestrationConfig, objective: str, trade_date: date, universe: list[str]
+) -> PhaseResult:
     with TriggerClient(
         config.backend_api_url, config.backend_api_token, config.trigger_timeout_seconds
     ) as client:
-        run_id = client.launch(config.objective, trade_date, config.subject_universe)
+        run_id = client.launch(objective, trade_date, universe)
         if run_id is None:
             return PhaseResult(status="SUCCESS", notes="agentic already running (409); nothing to poll")
         terminal = client.poll(run_id, config.poll_interval_seconds, config.poll_timeout_seconds)
