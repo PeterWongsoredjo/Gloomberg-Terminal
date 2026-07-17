@@ -3,10 +3,13 @@ import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
+from app.core.ratelimit import RateLimitMiddleware
 from app.lifespan import lifespan
 
 # psycopg's async checkpointer needs a selector loop; Windows defaults to a proactor one
@@ -27,6 +30,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # per-IP ceiling, in-memory: fine single-process, needs Redis if ever multi-process
+    app.state.limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=[settings.rate_limit] if settings.rate_limit else [],
+        enabled=bool(settings.rate_limit),  # empty limit turns the ceiling off, dev only
+    )
+    app.add_middleware(RateLimitMiddleware)
     register_exception_handlers(app)
     app.include_router(api_router, prefix="/api/v1")
     return app

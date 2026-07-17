@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type Query,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, type Query } from "@tanstack/react-query";
 
-import { ApiError, fetchEnvelope, postForRunId } from "@/lib/api/client";
+import { ApiError, fetchEnvelope } from "@/lib/api/client";
 import type {
   DataTelemetry,
   InsightPanelData,
@@ -16,15 +10,12 @@ import type {
   MarketState,
   NewsFeedPage,
   RunReasoningTrace,
-  RunStatusData,
 } from "@/lib/types/api";
 import type { SessionPhase, ViewEnvelope } from "@/lib/types/envelope";
 
 /* Server-state hooks, one per endpoint, read-only and never optimistic. */
 
 const FROZEN_PHASES: SessionPhase[] = ["SESSION_BREAK", "POST_TRADING", "CLOSED"];
-
-const TERMINAL_RUN_STATUSES = new Set(["SUCCEEDED", "SUCCESS", "COMPLETED", "DEGRADED", "ABORTED", "FAILED"]);
 
 type EnvelopeQuery<T> = Query<ViewEnvelope<T>, Error>;
 
@@ -92,33 +83,5 @@ export function useRunTrace(runId: string | null) {
     queryKey: ["run-trace", runId],
     queryFn: () => fetchEnvelope<RunReasoningTrace>(`/runs/${runId}/trace`),
     enabled: runId !== null,
-  });
-}
-
-/** Polls a dispatched run until it reaches a terminal status. */
-export function useRunStatus(runId: string | null) {
-  return useQuery({
-    queryKey: ["run-status", runId],
-    queryFn: () => fetchEnvelope<RunStatusData>(`/runs/${runId}`),
-    enabled: runId !== null,
-    refetchInterval: (query: EnvelopeQuery<RunStatusData>) => {
-      const status = query.state.data?.data.status?.toUpperCase();
-      return status !== undefined && TERMINAL_RUN_STATUSES.has(status) ? false : 2_500;
-    },
-  });
-}
-
-export function isTerminalRunStatus(status: string | undefined): boolean {
-  return status !== undefined && TERMINAL_RUN_STATUSES.has(status.toUpperCase());
-}
-
-/** Dispatches an on-demand insight run for one ticker. */
-export function useInsightRefresh(ticker: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => postForRunId(`/insights/${ticker}/refresh`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["run-status"] });
-    },
   });
 }

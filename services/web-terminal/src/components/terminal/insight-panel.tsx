@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Activity, AlertTriangle, RefreshCw, Zap } from "lucide-react";
 
-import { isTerminalRunStatus, useInsight, useInsightRefresh, useRunStatus } from "@/lib/api/hooks";
+import { useInsight } from "@/lib/api/hooks";
 import { fmtWibDateTime } from "@/lib/format";
 import { UP_CLASS, WARN_CLASS } from "@/lib/palette";
 import type { InsightPanelData } from "@/lib/types/api";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { PanelStatus } from "./panel-status";
 import { ProvenanceModal } from "./provenance-modal";
@@ -27,32 +26,13 @@ const STATUS_CLASS: Record<InsightPanelData["status"], string> = {
 
 export function InsightPanel({ ticker }: InsightPanelProps) {
   const insight = useInsight(ticker);
-  const refresh = useInsightRefresh(ticker);
-  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const runStatus = useRunStatus(pendingRunId);
-  const queryClient = useQueryClient();
-
-  const runDone = pendingRunId !== null && isTerminalRunStatus(runStatus.data?.data.status);
-  const handledRunRef = useRef<string | null>(null);
-
-  // when the dispatched run lands, pull the fresh insight
-  useEffect(() => {
-    if (runDone && handledRunRef.current !== pendingRunId) {
-      handledRunRef.current = pendingRunId;
-      queryClient.invalidateQueries({ queryKey: ["insight", ticker] });
-    }
-  }, [runDone, pendingRunId, queryClient, ticker]);
-
-  const requestAnalysis = () => {
-    refresh.mutate(undefined, { onSuccess: (runId) => setPendingRunId(runId) });
-  };
 
   const envelope = insight.data ?? null;
   const panel = envelope?.data ?? null;
   const degraded = panel?.status === "DEGRADED";
   const stale = envelope !== null && !envelope.fresh;
-  const running = pendingRunId !== null && !runDone;
+  const refreshing = insight.isRefetching;
 
   return (
     <section className="relative flex min-h-0 flex-col">
@@ -76,12 +56,12 @@ export function InsightPanel({ ticker }: InsightPanelProps) {
         </span>
         <div className="flex items-center gap-2">
           <button
-            onClick={requestAnalysis}
-            disabled={running || refresh.isPending}
+            onClick={() => insight.refetch()}
+            disabled={refreshing}
             className="flex items-center gap-1.5 border border-zinc-700 bg-zinc-900 px-2 py-0.5 tracking-wide text-zinc-100 transition-colors hover:border-[#FBBF24] hover:text-[#FBBF24] disabled:opacity-50"
           >
-            <RefreshCw className={`h-3 w-3 ${running ? "animate-spin" : ""}`} />
-            {running ? "RUN IN FLIGHT" : "REQUEST ANALYSIS"}
+            <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "REFRESHING" : "REFRESH INSIGHT"}
           </button>
           <button
             onClick={() => setModalOpen(true)}
@@ -101,7 +81,7 @@ export function InsightPanel({ ticker }: InsightPanelProps) {
       {insight.isSuccess && panel === null && (
         <PanelStatus
           state="EMPTY"
-          message={`No insight artifact for ${ticker} yet. Request analysis to dispatch a run.`}
+          message={`No insight artifact for ${ticker} yet. The scheduler refreshes insights hourly during session.`}
         />
       )}
 

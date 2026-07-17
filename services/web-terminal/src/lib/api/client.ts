@@ -51,19 +51,6 @@ export async function fetchEnvelope<TData>(path: string): Promise<ViewEnvelope<T
   return unwrapEnvelope<TData>(await response.json());
 }
 
-/** POSTs a dispatch endpoint and returns the accepted or already-running run id. */
-export async function postForRunId(path: string): Promise<string> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: authHeaders(),
-  });
-  if (response.status !== 202 && response.status !== 409) {
-    throw new ApiError(response.status, await problemOf(response));
-  }
-  const body = (await response.json()) as { run_id: string };
-  return body.run_id;
-}
-
 /** The tape stream address, token attached when configured. */
 export function tapeStreamUrl(): string {
   const ws = API_BASE.replace(/^http/, "ws");

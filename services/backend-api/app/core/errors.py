@@ -16,7 +16,7 @@ class Problem(BaseModel):
     correlation: dict[str, Any] | None = None
 
 
-def _problem_response(title: str, status_code: int, request: Request) -> JSONResponse:
+def problem_response(title: str, status_code: int, request: Request) -> JSONResponse:
     """Renders a Problem as the RFC 9457 problem+json response shape."""
     problem = Problem(title=title, status=status_code, instance=str(request.url.path))
     return JSONResponse(
@@ -32,8 +32,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         title = exc.detail if isinstance(exc.detail, str) else "Request failed"
-        return _problem_response(title, exc.status_code, request)
+        return problem_response(title, exc.status_code, request)
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        return _problem_response("Internal server error", 500, request)
+        return problem_response("Internal server error", 500, request)

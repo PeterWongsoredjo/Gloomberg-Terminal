@@ -166,7 +166,7 @@ async def test_get_unknown_run_is_404() -> None:
 
 
 async def test_missing_token_is_401(monkeypatch: pytest.MonkeyPatch) -> None:
-    """With a token configured, a request without a matching Bearer is rejected before dispatch."""
+    """With a token configured, a dispatch without a matching Bearer is rejected before launch."""
     monkeypatch.setattr(core_settings, "api_token", "s3cret")
     state = _app_state(None, FakeGraph(None))
     app.dependency_overrides[require_agentic] = lambda: state
@@ -179,9 +179,28 @@ async def test_missing_token_is_401(monkeypatch: pytest.MonkeyPatch) -> None:
             assert missing.status_code == 401
             assert missing.headers["content-type"] == "application/problem+json"
 
-            wrong = await client.get(
-                "/api/v1/runs/whatever", headers={"Authorization": "Bearer nope"}
+            wrong = await client.post(
+                "/api/v1/runs",
+                json={"objective": _OBJECTIVE, "trade_date": _TRADE_DATE, "subject_universe": ["TLKM"]},
+                headers={"Authorization": "Bearer nope"},
             )
             assert wrong.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_run_reads_stay_public_when_token_is_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The zero-cost run GETs are ungated so the public audit modal keeps working."""
+    monkeypatch.setattr(core_settings, "api_token", "s3cret")
+    state = _app_state(None, FakeGraph(None))
+    app.dependency_overrides[require_agentic] = lambda: state
+    try:
+        async for client in _client():
+            # no ledger pool here, so a public read hits 503, never a 401 gate
+            resp = await client.get("/api/v1/runs/whatever")
+            assert resp.status_code == 503
+            trace = await client.get("/api/v1/runs/whatever/trace")
+            assert trace.status_code in (404, 503)
+            assert resp.status_code != 401 and trace.status_code != 401
     finally:
         app.dependency_overrides.clear()

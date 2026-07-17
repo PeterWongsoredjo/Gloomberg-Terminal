@@ -133,9 +133,8 @@ async def create_run(
 async def get_run_status(
     run_id: str,
     app_state: AppState = Depends(require_agentic),
-    _: None = Depends(require_operator),
 ) -> Envelope[RunStatusData]:
-    """Returns the run's status."""
+    """Returns the run's status, a public ledger read with zero inference cost."""
     deps = app_state.agentic_deps
     assert deps is not None
     if deps.pg_pool is None:
@@ -167,7 +166,6 @@ async def get_run_status(
 async def get_run_trace(
     run_id: str,
     app_state: AppState = Depends(require_agentic),
-    _: None = Depends(require_operator),
 ) -> Envelope[RunReasoningTrace]:
     """The ordered nodes a run walked, its iterations, and what it concluded — descriptive only."""
     pg = ServingPostgresReader(app_state.pg_pool)
