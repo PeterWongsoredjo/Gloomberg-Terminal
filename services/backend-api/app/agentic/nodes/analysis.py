@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, ValidationError
 
 from app.agentic import cache
-from app.agentic.nodes._common import get_deps, item_ids, news_for_ticker, user_payload
+from app.agentic.nodes._common import get_deps, item_ids, newest, news_for_ticker, user_payload
 from app.agentic.objectives import spec_for
 from app.agentic.prompts.registry import PromptTemplate, get_prompt
 from app.agentic.providers.base import ProviderError, ProviderRequest
@@ -22,7 +22,7 @@ from app.agentic.providers.ladder import ProviderLadder
 from app.agentic.state import AgentState, budget_delta
 
 
-def _tasks(state: AgentState, prompt: PromptTemplate) -> list[dict[str, Any]]:
+def _tasks(state: AgentState, prompt: PromptTemplate, news_cap: int) -> list[dict[str, Any]]:
     objective = state["objective"]
     context = state["context"]
     correction = (state["working"].get("evaluation") or {}).get("reasons", [])
@@ -37,7 +37,7 @@ def _tasks(state: AgentState, prompt: PromptTemplate) -> list[dict[str, Any]]:
 
     tasks = []
     for row in context["market_context"]:
-        news = news_for_ticker(context["news_items"], str(row["ticker"]))
+        news = newest(news_for_ticker(context["news_items"], str(row["ticker"])), news_cap)
         payload = {
             "subject": {"ticker": row["ticker"], "security_id": row["security_id"]},
             "market_context": row,
@@ -111,7 +111,7 @@ async def run_analysis(state: AgentState, config: RunnableConfig) -> dict[str, A
     tokens = 0
     async with deps.tracer.span(objective, state["run_id"]) as span:
         try:
-            for task in _tasks(state, prompt):
+            for task in _tasks(state, prompt, deps.settings.max_news_per_subject):
                 result = await _infer(ladder, prompt, schema, task["user"])
                 tokens += result["prompt_tokens"] + result["completion_tokens"]
                 drafts.append(

@@ -37,6 +37,16 @@ def news_for_ticker(news_items: list[dict[str, Any]], ticker: str) -> list[dict[
     return tagged if tagged else news_items
 
 
+def newest(news_items: list[dict[str, Any]], cap: int) -> list[dict[str, Any]]:
+    """The newest cap items, so one busy news day cannot blow a provider limit."""
+    ordered = sorted(
+        news_items,
+        key=lambda n: (str(n.get("published_at") or ""), str(n.get("item_id") or "")),
+        reverse=True,
+    )
+    return ordered[:cap]
+
+
 def item_ids(news_items: list[dict[str, Any]]) -> set[str]:
     """The set of supplied news item_ids, for the grounding check."""
     return {str(n["item_id"]) for n in news_items if n.get("item_id") is not None}

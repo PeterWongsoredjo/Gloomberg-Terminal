@@ -46,7 +46,7 @@ class GroqProvider:
         except groq.APIStatusError as exc:
             if exc.status_code >= 500:
                 raise ProviderUnavailable(f"groq {exc.status_code}") from exc
-            raise ProviderError(f"groq {exc.status_code}") from exc
+            raise ProviderError(f"groq {exc.status_code}: {str(exc)[:160]}") from exc
 
         latency_ms = int((time.monotonic() - started) * 1000)
         text = completion.choices[0].message.content or ""

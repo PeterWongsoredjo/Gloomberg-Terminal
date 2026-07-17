@@ -28,10 +28,11 @@ class GeminiProvider:
 
     async def complete(self, request: ProviderRequest) -> ProviderResponse:
         started = time.monotonic()
+        # raw JSON Schema lane: the typed lane rejects our strict additionalProperties
         config = types.GenerateContentConfig(
             system_instruction=request.system,
             response_mime_type="application/json",
-            response_schema=request.response_model,
+            response_json_schema=request.response_model.model_json_schema(),
             temperature=request.temperature,
             seed=request.seed,
             max_output_tokens=request.max_output_tokens,
@@ -43,7 +44,7 @@ class GeminiProvider:
         except errors.ClientError as exc:
             if exc.code == 429:
                 raise ProviderRateLimited(f"gemini 429: {exc}") from exc
-            raise ProviderError(f"gemini {exc.code}") from exc
+            raise ProviderError(f"gemini {exc.code}: {str(exc)[:160]}") from exc
         except errors.ServerError as exc:
             raise ProviderUnavailable(f"gemini {exc.code}") from exc
         except errors.APIError as exc:

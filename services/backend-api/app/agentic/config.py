@@ -32,7 +32,8 @@ class AgenticSettings(BaseSettings):
 
     groq_model: str = "llama-3.3-70b-versatile"
     groq_fallback_model: str = "llama-3.1-8b-instant"
-    gemini_model: str = "gemini-2.5-flash-lite"
+    # 2.5-flash-lite was retired for new users mid-2026, pin its stable successor
+    gemini_model: str = "gemini-3.1-flash-lite"
 
     # budget caps
     max_loop_iterations: int = 3
@@ -50,6 +51,9 @@ class AgenticSettings(BaseSettings):
 
     # intraday scoring gives up on an item after this many runs
     intraday_max_score_attempts: int = 3
+
+    # newest news items sent per subject, bounds prompt size on busy days
+    max_news_per_subject: int = 12
 
     # cache
     cache_ttl_hours: int = 20

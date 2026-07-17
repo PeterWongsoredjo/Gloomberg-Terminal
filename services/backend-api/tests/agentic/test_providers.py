@@ -123,7 +123,7 @@ async def test_groq_adapter_uses_json_object_mode() -> None:
 
 
 async def test_gemini_adapter_passes_response_schema() -> None:
-    """The Gemini adapter constrains generation with the AG-02 Pydantic schema."""
+    """The Gemini adapter constrains generation with the raw AG-02 JSON schema."""
     captured: dict[str, Any] = {}
 
     async def generate_content(**kwargs: Any) -> Any:
@@ -134,8 +134,8 @@ async def test_gemini_adapter_passes_response_schema() -> None:
         )
 
     client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
-    provider = GeminiProvider(client, "gemini-2.5-flash-lite")  # type: ignore[arg-type]
+    provider = GeminiProvider(client, "gemini-3.1-flash-lite")  # type: ignore[arg-type]
     response = await provider.complete(_request())
-    assert captured["config"].response_schema is SentimentValue
+    assert captured["config"].response_json_schema == SentimentValue.model_json_schema()
     assert captured["config"].response_mime_type == "application/json"
     assert response.parsed is not None and response.parsed["sentiment_label"] == "BEARISH"
