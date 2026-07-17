@@ -70,19 +70,33 @@ def test_ingest_none_landed_is_failed() -> None:
     assert result.ingest_run_id is None
 
 
+_CURATED = ["BBCA", "TLKM", "ASII"]
+
+
 def test_universe_comes_from_new_items() -> None:
     payload = {"new_items": ["a", "b"], "tickers": ["BBCA", "TLKM"]}
-    assert scoring_universe(payload, 16) == ["BBCA", "TLKM"]
+    assert scoring_universe(payload, 16, _CURATED) == ["BBCA", "TLKM"]
 
 
 def test_universe_is_capped() -> None:
-    payload = {"new_items": ["a"], "tickers": [f"TIC{i}" for i in range(20)]}
-    assert len(scoring_universe(payload, 16)) == 16
+    tickers = [f"TC{i:02d}" for i in range(20)]
+    payload = {"new_items": ["a"], "tickers": tickers}
+    assert len(scoring_universe(payload, 16, tickers)) == 16
 
 
 def test_universe_empty_without_new_items() -> None:
-    assert scoring_universe({"new_items": [], "tickers": ["BBCA"]}, 16) == []
-    assert scoring_universe(None, 16) == []
+    assert scoring_universe({"new_items": [], "tickers": ["BBCA"]}, 16, _CURATED) == []
+    assert scoring_universe(None, 16, _CURATED) == []
+
+
+def test_universe_intersects_with_curated_list() -> None:
+    payload = {"new_items": ["a"], "tickers": ["BBCA", "GOTO", "ASII"]}
+    assert scoring_universe(payload, 16, _CURATED) == ["BBCA", "ASII"]
+
+
+def test_empty_curated_universe_scores_nothing() -> None:
+    payload = {"new_items": ["a"], "tickers": ["BBCA"]}
+    assert scoring_universe(payload, 16, []) == []
 
 
 def test_projection_failure_degrades() -> None:

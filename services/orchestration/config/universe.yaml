@@ -1,0 +1,15 @@
+universe:
+  - ticker: IHSG
+    note: composite index, market-wide outlook subject, scored intraday only
+  - ticker: BBCA
+    note: big-four bank, deepest liquidity, dense news flow
+  - ticker: BBRI
+    note: big-four bank, micro-lending bellwether
+  - ticker: BMRI
+    note: big-four bank, state-owned flow signal
+  - ticker: BBNI
+    note: big-four bank, state-owned
+  - ticker: TLKM
+    note: telco heavyweight, index anchor
+  - ticker: ASII
+    note: autos and heavy-equipment conglomerate

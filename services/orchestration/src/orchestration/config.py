@@ -8,8 +8,10 @@ from pathlib import Path
 
 from pipeline.config import REPO_ROOT, load_root_env
 
-# the four dense-liquid tickers a daily_sentiment run defaults to when none are configured
-DEFAULT_UNIVERSE = ["BBCA", "BBRI", "TLKM", "ASII"]
+from orchestration.universe import load_universe
+
+# the hand-curated ticker list every scoring flow reads
+DEFAULT_UNIVERSE_FILE = REPO_ROOT / "services" / "orchestration" / "config" / "universe.yaml"
 
 
 @dataclass(frozen=True)
@@ -28,17 +30,15 @@ class OrchestrationConfig:
     objective: str
     session_windows: Path = REPO_ROOT / "services" / "backend-api" / "app" / "observability" / "config" / "session_windows.yaml"
     intraday_objective: str = "intraday_sentiment"
+    intraday_insight_objective: str = "intraday_insight"
     intraday_universe_cap: int = 16
-    subject_universe: list[str] = field(default_factory=lambda: list(DEFAULT_UNIVERSE))
-
-
-def _universe() -> list[str]:
-    raw = os.environ.get("GLOOMBERG_ORCH_UNIVERSE", "").strip()
-    return [t.strip().upper() for t in raw.split(",") if t.strip()] or list(DEFAULT_UNIVERSE)
+    universe_file: Path = DEFAULT_UNIVERSE_FILE
+    subject_universe: list[str] = field(default_factory=list)
 
 
 def get_config() -> OrchestrationConfig:
     load_root_env()
+    universe_file = Path(os.environ.get("GLOOMBERG_ORCH_UNIVERSE_FILE", str(DEFAULT_UNIVERSE_FILE)))
     return OrchestrationConfig(
         dbt_dir=Path(os.environ.get("GLOOMBERG_ORCH_DBT_DIR", str(REPO_ROOT / "dbt"))),
         calendar_seed=Path(
@@ -67,6 +67,10 @@ def get_config() -> OrchestrationConfig:
             )
         ),
         intraday_objective=os.environ.get("GLOOMBERG_ORCH_INTRADAY_OBJECTIVE", "intraday_sentiment"),
+        intraday_insight_objective=os.environ.get(
+            "GLOOMBERG_ORCH_INTRADAY_INSIGHT_OBJECTIVE", "intraday_insight"
+        ),
         intraday_universe_cap=int(os.environ.get("GLOOMBERG_ORCH_INTRADAY_UNIVERSE_CAP", "16")),
-        subject_universe=_universe(),
+        universe_file=universe_file,
+        subject_universe=load_universe(universe_file),
     )

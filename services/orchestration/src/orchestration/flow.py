@@ -33,6 +33,7 @@ from orchestration.tasks.guard import guard_trading_day
 from orchestration.tasks.ingest import ingest_feed, land_failed, load_fixtures_bronze
 from orchestration.tasks.promote import promote_gold
 from orchestration.tasks.trigger import trigger_agentic
+from orchestration.universe import equities
 
 
 def _fixture_roots() -> list[str]:
@@ -76,6 +77,19 @@ def _degrade_on_trigger_failure(exc: Exception) -> PhaseResult | None:
     return None
 
 
+def _trigger_result(dsn: str, flow_run_id: str, td: date, config: OrchestrationConfig) -> PhaseResult:
+    """Triggers the EOD agentic run over equities, or skips visibly when none are curated."""
+    tickers = equities(config.subject_universe)
+    if not tickers:
+        skip = PhaseResult(status="SKIPPED", notes="no curated equities, agentic trigger skipped")
+        return run_phase(dsn, flow_run_id, td, "trigger_agentic", lambda: skip)
+    eod_config = replace(config, subject_universe=tickers)
+    return run_phase(
+        dsn, flow_run_id, td, "trigger_agentic",
+        lambda: trigger_agentic(td, eod_config), on_error=_degrade_on_trigger_failure,
+    )
+
+
 _TASK_RUNNER: ThreadPoolTaskRunner[Any] = ThreadPoolTaskRunner(max_workers=2)
 
 
@@ -111,10 +125,7 @@ def gloomberg_daily_flow(trade_date: str | None = None, objective: str | None = 
 
         run_phase(dsn, flow_run_id, td, "dbt_build", lambda: dbt_build(config))
         run_phase(dsn, flow_run_id, td, "promote", lambda: promote_gold())
-        trigger = run_phase(
-            dsn, flow_run_id, td, "trigger_agentic",
-            lambda: trigger_agentic(td, config), on_error=_degrade_on_trigger_failure,
-        )
+        trigger = _trigger_result(dsn, flow_run_id, td, config)
 
         overall = rollup(gate.status, trigger.status)
         return overall

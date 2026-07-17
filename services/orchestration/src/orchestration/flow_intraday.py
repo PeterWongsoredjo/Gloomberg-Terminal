@@ -1,7 +1,7 @@
 """
 intraday_news :
 
-session guard -> land the four RSS feeds -> project new items to Postgres
+session guard -> land the curated RSS feeds -> project new items to Postgres
 -> trigger intraday sentiment when anything new was tagged -> finalize.
 
 Outside an open session the whole run is a SKIP, never a failure.
@@ -61,11 +61,12 @@ def _ingest_news(td: date) -> PhaseResult:
     return ingest_news_result(manifests)
 
 
-def scoring_universe(payload: dict[str, Any] | None, cap: int) -> list[str]:
-    """The tickers tagged on this poll's new items, capped for the fan-out."""
+def scoring_universe(payload: dict[str, Any] | None, cap: int, universe: list[str]) -> list[str]:
+    """The curated tickers tagged on this poll's new items, capped for the fan-out."""
     if not payload or not payload.get("new_items"):
         return []
-    return [str(t) for t in payload.get("tickers") or []][:cap]
+    curated = set(universe)
+    return [str(t) for t in payload.get("tickers") or [] if str(t) in curated][:cap]
 
 
 def _degrade_on_projection_failure(exc: Exception) -> PhaseResult | None:
@@ -85,9 +86,9 @@ def _trigger_result(
     if project.status != "SUCCESS":
         skip = PhaseResult(status="SKIPPED", notes="projection unavailable, scoring skipped")
         return run_phase(dsn, flow_run_id, td, "trigger_intraday", lambda: skip)
-    tickers = scoring_universe(project.payload, config.intraday_universe_cap)
+    tickers = scoring_universe(project.payload, config.intraday_universe_cap, config.subject_universe)
     if not tickers:
-        skip = PhaseResult(status="SKIPPED", notes="no new tagged items, trigger skipped")
+        skip = PhaseResult(status="SKIPPED", notes="no new tagged items in universe, trigger skipped")
         return run_phase(dsn, flow_run_id, td, "trigger_intraday", lambda: skip)
     return run_phase(
         dsn, flow_run_id, td, "trigger_intraday",
