@@ -22,7 +22,7 @@ class FeedSpec:
     date_scoped: bool = False
 
 
-# the four live-tested JSON feeds plus the redundant news RSS feeds
+# the four live-tested JSON feeds plus the curated news RSS feeds
 FEEDS: dict[str, FeedSpec] = {
     "daily_trade": FeedSpec(
         source="idx_summary",
@@ -50,12 +50,6 @@ FEEDS: dict[str, FeedSpec] = {
         source="news_rss",
         dataset="cnbc_market",
         url="https://www.cnbcindonesia.com/market/rss",
-        ext="xml",
-    ),
-    "news_cnbc_all": FeedSpec(
-        source="news_rss",
-        dataset="cnbc_all",
-        url="https://www.cnbcindonesia.com/rss",
         ext="xml",
     ),
     "news_kontan": FeedSpec(

@@ -15,13 +15,15 @@ from xml.etree import ElementTree
 import zstandard
 from minio import Minio
 
+from pipeline.bronze.feeds import FEEDS
 from pipeline.bronze.ingest import client, land_payloads
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import BRONZE_BUCKET, Settings, get_settings
 
 _TICKER = re.compile(r"\b[A-Z]{4}\b")
-# common 4-letter uppercase tokens that are not tickers
-_NOT_TICKER = {"IHSG", "LQ45", "RUPS", "IPGF", "HMETD"}
+_NOT_TICKER = {"LQ45", "RUPS", "IPGF", "HMETD"}
+
+_ACTIVE_DATASETS = {spec.dataset for spec in FEEDS.values() if spec.source == "news_rss"}
 
 
 def _text(item: ElementTree.Element, tag: str) -> str:
@@ -84,6 +86,8 @@ def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
         if "/items/" in name or f"ingest_date={trade_date.isoformat()}" not in name or not name.endswith(".zst"):
             continue
         dataset = name.split("/")[1]
+        if dataset not in _ACTIVE_DATASETS:
+            continue
         response = minio.get_object(BRONZE_BUCKET, name)
         try:
             out.append((dataset, decompressor.decompress(response.read())))

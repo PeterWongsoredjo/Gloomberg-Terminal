@@ -122,6 +122,10 @@ def gold_conn() -> duckdb.DuckDBPyConnection:
         "('ev1',1001,'BBCA','STOCK_SPLIT','2026-07-03',true,false)"
     )
     con.execute(
+        "create table fct_index_level(index_id varchar, trade_date date, close_level double, change_level double)"
+    )
+    con.execute("insert into fct_index_level values ('IHSG','2026-07-03',7350.2,-41.3)")
+    con.execute(
         "create table fct_news_item(item_id varchar, trade_date date, source varchar, lang varchar, "
         "title varchar, summary varchar, url varchar, published_at timestamp, tickers varchar[])"
     )

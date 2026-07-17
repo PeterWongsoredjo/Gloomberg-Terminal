@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from pipeline.bronze import news
+from pipeline.bronze.feeds import FEEDS, NEWS_FEEDS
 from pipeline.bronze.news import day_items, parse_rss
 
 if TYPE_CHECKING:
@@ -35,14 +36,39 @@ _RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 
 
 def test_parse_rss_extracts_items_and_tickers() -> None:
-    """Two items parse, the ticker candidate is found, IHSG is excluded."""
+    """Two items parse, the ticker candidate is found, IHSG tags the index subject."""
     items = parse_rss(_RSS, "cnbc_market")
     assert len(items) == 2
     first = items[0]
     assert first["source"] == "cnbc_market"
     assert "BBCA" in first["tickers"]
-    assert "IHSG" not in first["tickers"]
+    assert "IHSG" in first["tickers"]
     assert first["published_at"].endswith("+00:00")
+
+
+def test_parse_rss_still_blocks_non_subject_tokens() -> None:
+    """LQ45 and corporate-action jargon never tag, only real subjects do."""
+    rss = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel><item>
+      <title>LQ45 turun jelang RUPS emiten</title>
+      <description>Belum ada HMETD yang diumumkan.</description>
+      <link>https://example.com/lq45</link>
+      <pubDate>Fri, 03 Jul 2026 09:15:00 +0700</pubDate>
+    </item></channel></rss>"""
+    items = parse_rss(rss, "cnbc_market")
+    assert items[0]["tickers"] == []
+
+
+def test_news_feeds_registry_dropped_cnbc_all() -> None:
+    """The curated registry carries exactly the three quality feeds."""
+    datasets = {FEEDS[name].dataset for name in NEWS_FEEDS}
+    assert datasets == {"cnbc_market", "kontan_investasi", "antara_ekonomi"}
+
+
+def test_retired_datasets_go_dark_immediately() -> None:
+    """Already-landed payloads from a removed feed stop being parsed."""
+    assert "cnbc_all" not in news._ACTIVE_DATASETS
+    assert news._ACTIVE_DATASETS == {"cnbc_market", "kontan_investasi", "antara_ekonomi"}
 
 
 def test_parse_rss_stable_item_id() -> None:

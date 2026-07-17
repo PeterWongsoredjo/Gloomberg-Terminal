@@ -56,6 +56,34 @@ class GoldReader:
         """
         return await self._rows(sql, [trade_date, *universe])
 
+    async def index_context(self, index_id: str, trade_date: str) -> dict[str, Any] | None:
+        """The latest index level at or before the date, shaped like a market context row."""
+        sql = """
+            select index_id, trade_date, close_level, change_level
+            from fct_index_level
+            where index_id = ? and trade_date <= ?
+            order by trade_date desc
+            limit 1
+        """
+        try:
+            rows = await self._rows(sql, [index_id, trade_date])
+        except duckdb.CatalogException:
+            return None  # index facts not yet published to this snapshot
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "security_id": None,
+            "ticker": index_id,
+            "board": "INDEX",
+            "is_fca": False,
+            "sector_idxic": None,
+            "special_notation": [],
+            "close_level": row["close_level"],
+            "change_level": row["change_level"],
+            "level_as_of": str(row["trade_date"]),
+        }
+
     async def corporate_actions(self, universe: list[str], trade_date: str) -> list[dict[str, Any]]:
         if not universe:
             return []

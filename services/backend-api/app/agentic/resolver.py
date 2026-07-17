@@ -11,6 +11,9 @@ from app.agentic.warehouse import GoldReader
 
 _TICKER = re.compile(r"^[A-Z]{4}$")
 
+# index subjects are scoreable without a dim_security row, intraday only
+INDEX_SUBJECTS = frozenset({"IHSG"})
+
 
 @dataclass(frozen=True)
 class Resolution:
@@ -27,6 +30,8 @@ class EntityResolver:
         return cls(await gold.current_tickers())
 
     def is_known(self, ticker: str) -> bool:
+        if ticker in INDEX_SUBJECTS:
+            return True
         return bool(_TICKER.match(ticker)) and ticker in self._universe
 
     def resolve(self, tickers: list[str]) -> Resolution:
