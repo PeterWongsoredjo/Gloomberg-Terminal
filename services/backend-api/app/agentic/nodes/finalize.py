@@ -36,11 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 async def _project_intraday(deps: GraphDeps, state: AgentState, artifacts: list[dict[str, Any]]) -> None:
-    """Lands intraday scores in the projection, items retry next poll on failure."""
-    if state["objective"] != "intraday_sentiment" or deps.pg_pool is None:
+    """Lands intraday projections, the next scheduled run retries on failure."""
+    if state["objective"] not in intraday.INTRADAY_OBJECTIVES or deps.pg_pool is None:
         return
     try:
-        await intraday.project(deps.pg_pool, state, artifacts)
+        if state["objective"] == "intraday_sentiment":
+            await intraday.project(deps.pg_pool, state, artifacts)
+        else:
+            await intraday.project_insight(deps.pg_pool, state, artifacts)
     except asyncpg.PostgresError:
         logger.warning("intraday projection write failed for run %s", state["run_id"], exc_info=True)
 

@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import httpx
@@ -28,6 +29,15 @@ def test_launch_intraday_objective_keys_its_own_idempotency() -> None:
         return httpx.Response(202, json={"run_id": "RUN456"})
 
     assert _client(handler).launch("intraday_sentiment", TD, ["BBCA"]) == "RUN456"
+
+
+def test_launch_intraday_insight_keys_its_own_idempotency() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Idempotency-Key"] == "intraday_insight:2026-07-03"
+        assert json.loads(request.read())["subject_universe"] == ["BBCA", "TLKM"]
+        return httpx.Response(202, json={"run_id": "RUN789"})
+
+    assert _client(handler).launch("intraday_insight", TD, ["BBCA", "TLKM"]) == "RUN789"
 
 
 def test_launch_treats_409_as_idempotent_success() -> None:

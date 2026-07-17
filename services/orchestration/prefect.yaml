@@ -27,3 +27,13 @@ deployments:
       - interval: 900              # the session guard makes off-hours ticks a cheap SKIP
         anchor_date: "2026-01-01T09:00:00"
         timezone: "Asia/Jakarta"
+
+  - name: gloomberg-intraday-insight
+    entrypoint: src/orchestration/flow_intraday_insight.py:intraday_insight_flow
+    description: "In-session hourly insight refresh over the full curated universe (cadence is quota math, do not shorten casually)."
+    work_pool:
+      name: gloomberg-local
+    schedules:
+      - interval: 3600             # hourly keeps the provider budget safe (~300 req/day at 50 tickers)
+        anchor_date: "2026-01-01T09:05:00"
+        timezone: "Asia/Jakarta"

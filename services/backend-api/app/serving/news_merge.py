@@ -51,6 +51,15 @@ def merge_news(
     return ordered[:size], len(ordered) > size
 
 
+def freshest(gold: dict[str, Any] | None, pg: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Of two optional rows, the one with the newest generated_at, Gold wins ties."""
+    if gold is None:
+        return pg
+    if pg is None:
+        return gold
+    return pg if _as_utc(pg["generated_at"]) > _as_utc(gold["generated_at"]) else gold
+
+
 def merge_latest_sentiment(
     gold: dict[str, dict[str, Any]], pg: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:

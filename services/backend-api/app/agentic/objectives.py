@@ -34,6 +34,9 @@ OBJECTIVES: dict[str, ObjectiveSpec] = {
     "insight_synthesis": ObjectiveSpec(
         "insight_synthesis", "INSIGHT", InsightValue, ("groq", "gemini"), "synthesize_insight", "insight_confidence_gate"
     ),
+    "intraday_insight": ObjectiveSpec(
+        "intraday_insight", "INSIGHT", InsightValue, ("groq", "gemini"), "synthesize_insight", "insight_confidence_gate"
+    ),
 }
 
 # first objective declared for a type stays its canonical spec

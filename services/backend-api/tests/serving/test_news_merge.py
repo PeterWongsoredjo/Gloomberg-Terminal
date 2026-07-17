@@ -7,7 +7,13 @@ from typing import Any
 
 import pytest
 
-from app.serving.news_merge import decode_news_cursor, merge_latest_sentiment, merge_news, news_cursor
+from app.serving.news_merge import (
+    decode_news_cursor,
+    freshest,
+    merge_latest_sentiment,
+    merge_news,
+    news_cursor,
+)
 from app.serving.pagination import CursorError
 
 
@@ -115,3 +121,29 @@ def test_sentiment_union_keeps_single_source_tickers() -> None:
         {"BBCA": _sent(_utc(2), "gold")}, {"TLKM": _sent(_utc(4), "pg")}
     )
     assert set(merged) == {"BBCA", "TLKM"}
+
+
+def test_freshest_prefers_the_newer_row() -> None:
+    gold = {"artifact_id": "g", "generated_at": _utc(3)}
+    pg = {"artifact_id": "p", "generated_at": _utc(5)}
+    assert freshest(gold, pg) is pg
+    assert freshest(pg, gold) is pg
+
+
+def test_freshest_gold_wins_ties() -> None:
+    gold = {"artifact_id": "g", "generated_at": _utc(3)}
+    pg = {"artifact_id": "p", "generated_at": _utc(3)}
+    assert freshest(gold, pg) is gold
+
+
+def test_freshest_handles_missing_sides() -> None:
+    row = {"artifact_id": "g", "generated_at": _utc(3)}
+    assert freshest(row, None) is row
+    assert freshest(None, row) is row
+    assert freshest(None, None) is None
+
+
+def test_freshest_compares_across_timestamp_shapes() -> None:
+    gold = {"artifact_id": "g", "generated_at": "2026-07-14 03:00:00"}
+    pg = {"artifact_id": "p", "generated_at": _utc(4)}
+    assert freshest(gold, pg) is pg

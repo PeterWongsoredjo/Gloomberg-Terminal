@@ -50,6 +50,7 @@ returning item_id, tickers
 
 _PRUNE_ITEMS = "delete from intraday.news_item where trade_date < %s"
 _PRUNE_SENTIMENT = "delete from intraday.sentiment where trade_date < %s"
+_PRUNE_INSIGHT = "delete from intraday.insight where trade_date < %s"
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,8 @@ def prune(dsn: str, today: date, keep_days: int = 14) -> None:
     floor = date.fromordinal(today.toordinal() - keep_days)
     with psycopg.connect(dsn, connect_timeout=5, autocommit=True) as conn:
         conn.execute(_PRUNE_ITEMS, (floor,))
-        try:
-            conn.execute(_PRUNE_SENTIMENT, (floor,))
-        except psycopg.errors.UndefinedTable:
-            pass  # sentiment table appears once the backend booted
+        for sql in (_PRUNE_SENTIMENT, _PRUNE_INSIGHT):
+            try:
+                conn.execute(sql, (floor,))
+            except psycopg.errors.UndefinedTable:
+                pass  # scored tables appear once the backend booted

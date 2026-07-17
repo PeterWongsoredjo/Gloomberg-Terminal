@@ -114,6 +114,19 @@ def trigger_intraday(trade_date: date, tickers: list[str], config: Orchestration
     return _launch_and_poll(config, config.intraday_objective, trade_date, tickers)
 
 
+@task(
+    name="trigger_intraday_insight",
+    retries=TRIGGER_RETRIES,
+    retry_delay_seconds=TRIGGER_BACKOFF,
+    retry_jitter_factor=TRIGGER_JITTER,
+    retry_condition_fn=retry_on_transient_trigger,
+)
+def trigger_intraday_insight(
+    trade_date: date, tickers: list[str], config: OrchestrationConfig
+) -> PhaseResult:
+    return _launch_and_poll(config, config.intraday_insight_objective, trade_date, tickers)
+
+
 def _launch_and_poll(
     config: OrchestrationConfig, objective: str, trade_date: date, universe: list[str]
 ) -> PhaseResult:

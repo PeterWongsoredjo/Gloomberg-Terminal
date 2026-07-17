@@ -4,6 +4,7 @@ Read-only Postgres access to the agg_* projections and the agentic ledger.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -11,6 +12,19 @@ from typing import Any
 import asyncpg
 
 logger = logging.getLogger("gloomberg.serving.pg")
+
+
+def _json_list(raw: Any) -> list[Any]:
+    """A jsonb column as a real list, asyncpg hands it back as a string."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return []
 
 
 class ServingPostgresReader:
@@ -81,6 +95,24 @@ class ServingPostgresReader:
         """
         rows = await self._fetch(sql, tickers)
         return {str(r["ticker"]): r for r in rows}
+
+    async def latest_intraday_insight(self, ticker: str) -> dict[str, Any] | None:
+        """The newest in-session insight row for one ticker, shaped like the Gold read."""
+        sql = """
+            select artifact_id, ticker, trade_date, prompt_version, headline, narrative,
+                   contradictions, confidence, provider, model, generated_at,
+                   quality_flags as dq_flags
+            from intraday.insight
+            where ticker = $1
+            order by generated_at desc
+            limit 1
+        """
+        row = await self._fetchrow(sql, ticker)
+        if row is None:
+            return None
+        row["contradictions"] = _json_list(row.get("contradictions"))
+        row["dq_flags"] = _json_list(row.get("dq_flags"))
+        return row
 
     async def insight_provenance(self, artifact_id: str) -> dict[str, Any] | None:
         sql = """

@@ -1,5 +1,5 @@
 """
-In-session sentiment projection: reads unscored polled news, writes scored rows.
+In-session projections: polled news in, scored sentiment and insight rows out.
 """
 
 from __future__ import annotations
@@ -11,6 +11,9 @@ from typing import Any
 import asyncpg
 
 from app.agentic.state import AgentState
+
+# the objectives that run in session and land in the intraday schema
+INTRADAY_OBJECTIVES = frozenset({"intraday_sentiment", "intraday_insight"})
 
 _DDL = """
 create schema if not exists intraday;
@@ -32,12 +35,37 @@ create table if not exists intraday.sentiment (
     generated_at timestamptz not null,
     primary key (ticker, trade_date)
 );
+
+create table if not exists intraday.insight (
+    ticker text not null,
+    trade_date date not null,
+    artifact_id text not null,
+    run_id text not null,
+    trace_id text,
+    headline text not null,
+    narrative text not null,
+    contradictions jsonb not null default '[]'::jsonb,
+    confidence double precision not null,
+    quality_flags jsonb not null default '[]'::jsonb,
+    provider text not null,
+    model text not null,
+    prompt_version text not null,
+    generated_at timestamptz not null,
+    primary key (ticker, trade_date)
+);
 """
 
 _UNSCORED_SQL = """
 select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
 from intraday.news_item
 where trade_date = $1 and scored_at is null and score_attempts < $2
+order by published_at, item_id
+"""
+
+_DAY_ITEMS_SQL = """
+select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
+from intraday.news_item
+where trade_date = $1
 order by published_at, item_id
 """
 
@@ -51,6 +79,28 @@ _SCORED_SQL = """
 update intraday.news_item
 set scored_at = now(), scored_run_id = $2
 where item_id = any($1) and scored_at is null
+"""
+
+_INSIGHT_UPSERT_SQL = """
+insert into intraday.insight (
+    ticker, trade_date, artifact_id, run_id, trace_id, headline, narrative,
+    contradictions, confidence, quality_flags, provider, model, prompt_version, generated_at
+)
+values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+on conflict (ticker, trade_date) do update set
+    artifact_id = excluded.artifact_id,
+    run_id = excluded.run_id,
+    trace_id = excluded.trace_id,
+    headline = excluded.headline,
+    narrative = excluded.narrative,
+    contradictions = excluded.contradictions,
+    confidence = excluded.confidence,
+    quality_flags = excluded.quality_flags,
+    provider = excluded.provider,
+    model = excluded.model,
+    prompt_version = excluded.prompt_version,
+    generated_at = excluded.generated_at
+where excluded.generated_at > intraday.insight.generated_at
 """
 
 _UPSERT_SQL = """
@@ -103,6 +153,15 @@ async def unscored_items(pool: asyncpg.Pool, trade_date: str, max_attempts: int)
     return [dict(r) for r in rows]
 
 
+async def day_items(pool: asyncpg.Pool, trade_date: str) -> list[dict[str, Any]]:
+    """Every article polled today, for the periodic insight refresh."""
+    try:
+        rows = await pool.fetch(_DAY_ITEMS_SQL, _as_date(trade_date))
+    except (asyncpg.UndefinedTableError, asyncpg.PostgresConnectionError):
+        return []
+    return [dict(r) for r in rows]
+
+
 def _sentiment_row(artifact: dict[str, Any], state: AgentState) -> tuple[Any, ...] | None:
     """One upsert-ready row from an accepted sentiment artifact dict."""
     ticker = (artifact.get("subject") or {}).get("ticker")
@@ -142,3 +201,37 @@ async def project(pool: asyncpg.Pool, state: AgentState, artifacts: list[dict[st
                 await conn.execute(_SCORED_SQL, scored, state["run_id"])
             for row in rows:
                 await conn.execute(_UPSERT_SQL, *row)
+
+
+def _insight_row(artifact: dict[str, Any], state: AgentState) -> tuple[Any, ...] | None:
+    """One upsert-ready row from an accepted insight artifact dict."""
+    ticker = (artifact.get("subject") or {}).get("ticker")
+    value = artifact.get("value") or {}
+    if artifact.get("artifact_type") != "INSIGHT" or not ticker:
+        return None
+    provenance = artifact["provenance"]
+    return (
+        str(ticker),
+        _as_date(state["trade_date"]),
+        str(artifact["artifact_id"]),
+        state["run_id"],
+        state.get("trace_id"),
+        str(value["headline"]),
+        str(value["narrative"]),
+        json.dumps(value.get("contradictions", [])),
+        float(artifact["confidence"]),
+        json.dumps(artifact.get("quality_flags", [])),
+        str(provenance["provider"]),
+        str(provenance["model"]),
+        str(provenance["prompt_version"]),
+        _as_datetime(provenance["generated_at"]),
+    )
+
+
+async def project_insight(pool: asyncpg.Pool, state: AgentState, artifacts: list[dict[str, Any]]) -> None:
+    """Lands insight rows freshest-wins, never touching the news scoring lifecycle."""
+    rows = [r for r in (_insight_row(a, state) for a in artifacts) if r is not None]
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for row in rows:
+                await conn.execute(_INSIGHT_UPSERT_SQL, *row)

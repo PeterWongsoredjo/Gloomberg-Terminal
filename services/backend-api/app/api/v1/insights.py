@@ -13,6 +13,7 @@ from app.lifespan import AppState
 from app.serving import mappers
 from app.serving.envelope import build_envelope
 from app.serving.models import InsightPanel, InsightSignal
+from app.serving.news_merge import freshest
 from app.serving.readers.gold import ServingGoldReader
 from app.serving.readers.postgres import ServingPostgresReader
 
@@ -28,11 +29,12 @@ async def get_insight_panel(
     """A descriptive read on one security with derived signals and full model provenance."""
     upper = ticker.upper()
     gold = ServingGoldReader(app_state.duckdb_ro)
-    fct = await gold.insight(upper)
+    pg = ServingPostgresReader(app_state.pg_pool)
+    # in session the hourly intraday refresh wins, the later EOD build supersedes it
+    fct = freshest(await gold.insight(upper), await pg.latest_intraday_insight(upper))
     if fct is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no insight for ticker")
 
-    pg = ServingPostgresReader(app_state.pg_pool)
     provenance = await pg.insight_provenance(str(fct["artifact_id"]))
     signals = await _signals(pg, upper)
 
