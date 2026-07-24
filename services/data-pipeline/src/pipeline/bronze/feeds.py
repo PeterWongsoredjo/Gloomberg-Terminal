@@ -20,6 +20,7 @@ class FeedSpec:
     ext: str = "json"
     is_universe: bool = False
     date_scoped: bool = False
+    accumulates: bool = False
 
 
 # the four live-tested JSON feeds plus the curated news RSS feeds
@@ -51,18 +52,21 @@ FEEDS: dict[str, FeedSpec] = {
         dataset="cnbc_market",
         url="https://www.cnbcindonesia.com/market/rss",
         ext="xml",
+        accumulates=True,
     ),
     "news_kontan": FeedSpec(
         source="news_rss",
         dataset="kontan_investasi",
         url="https://investasi.kontan.co.id/rss",
         ext="xml",
+        accumulates=True,
     ),
     "news_antara": FeedSpec(
         source="news_rss",
         dataset="antara_ekonomi",
         url="https://www.antaranews.com/rss/ekonomi.xml",
         ext="xml",
+        accumulates=True,
     ),
 }
 

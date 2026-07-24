@@ -16,7 +16,7 @@ from ulid import ULID
 
 from pipeline.bronze import paths
 from pipeline.bronze.feeds import FeedSpec
-from pipeline.bronze.manifest import build_manifest
+from pipeline.bronze.manifest import build_manifest, deterministic_run_id, idempotency_key
 from pipeline.config import BRONZE_BUCKET, Settings
 
 
@@ -105,6 +105,15 @@ def land_payloads(
     return manifest
 
 
+def run_id_for(spec: FeedSpec, trade_date: date) -> str:
+    """Fresh id for accumulating feeds, deterministic id so EOD re-runs replace."""
+    if spec.accumulates:
+        return str(ULID())
+    return deterministic_run_id(
+        idempotency_key(spec.source, spec.dataset, trade_date, spec.source_version)
+    )
+
+
 def fetch_and_land(minio: Minio, spec: FeedSpec, trade_date: date) -> dict[str, Any]:
     """Fetches one live feed and lands it in Bronze, raises FetchError on upstream failure."""
     url = spec.url.format(ymd=trade_date.strftime("%Y%m%d")) if spec.date_scoped else spec.url
@@ -116,7 +125,7 @@ def fetch_and_land(minio: Minio, spec: FeedSpec, trade_date: date) -> dict[str, 
         dataset=spec.dataset,
         trade_date=trade_date,
         source_version=spec.source_version,
-        ingest_run_id=str(ULID()),
+        ingest_run_id=run_id_for(spec, trade_date),
         payloads=[raw],
         record_count=count,
         expected_universe=count,  # no live universe oracle; coverage gaps come from manifest quality
@@ -128,7 +137,7 @@ def fetch_and_land(minio: Minio, spec: FeedSpec, trade_date: date) -> dict[str, 
 
 def emit_failed_manifest(minio: Minio, spec: FeedSpec, trade_date: date, reason: str) -> dict[str, Any]:
     manifest = build_manifest(
-        ingest_run_id=str(ULID()),
+        ingest_run_id=run_id_for(spec, trade_date),
         source=spec.source,
         dataset=spec.dataset,
         trade_date=trade_date,
