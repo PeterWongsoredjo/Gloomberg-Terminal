@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query, WebSocket, status
+from fastapi import APIRouter, Depends, WebSocket
 
 from app.api.v1.deps import anchor_trade_date, get_app_state
-from app.core.config import settings
 from app.core.envelope import Envelope
 from app.lifespan import AppState
 from app.serving import mappers
@@ -44,14 +43,9 @@ async def get_tape_snapshot(app_state: AppState = Depends(get_app_state)) -> Env
 @router.websocket("/tape/stream")
 async def stream_tape(
     websocket: WebSocket,
-    token: str | None = Query(default=None),
     app_state: AppState = Depends(get_app_state),
 ) -> None:
-    """Streams snapshot then deltas, freezing to heartbeats when the market is closed."""
-    if settings.api_token and token != settings.api_token:  # loopback-trust when no token is set
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
+    """Streams snapshot then deltas, a public read like the tape REST snapshot."""
     await websocket.accept()
     reader = ServingPostgresReader(app_state.pg_pool)
     await TapeStreamer(websocket, reader, app_state.slo_engine).run()

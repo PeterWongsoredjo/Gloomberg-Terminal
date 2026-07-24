@@ -51,9 +51,7 @@ export async function fetchEnvelope<TData>(path: string): Promise<ViewEnvelope<T
   return unwrapEnvelope<TData>(await response.json());
 }
 
-/** The tape stream address, token attached when configured. */
+/** The tape stream address, a public read needing no token. */
 export function tapeStreamUrl(): string {
-  const ws = API_BASE.replace(/^http/, "ws");
-  const suffix = API_TOKEN ? `?token=${encodeURIComponent(API_TOKEN)}` : "";
-  return `${ws}/tape/stream${suffix}`;
+  return `${API_BASE.replace(/^http/, "ws")}/tape/stream`;
 }

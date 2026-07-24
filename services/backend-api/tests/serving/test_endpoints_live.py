@@ -111,6 +111,19 @@ def test_tape_websocket_opens_with_snapshot() -> None:
         socket.close()
 
 
+def test_tape_websocket_is_public_when_token_gate_is_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tape stream stays a public read even with the operator token configured."""
+    if not asyncio.run(_infra_ready()):
+        pytest.skip("postgres/projections/gold not available")
+
+    monkeypatch.setattr(core_settings, "api_token", "operator-secret")
+    ws_app = FastAPI(lifespan=_ws_lifespan)
+    ws_app.include_router(tape.router, prefix="/api/v1")
+    with TestClient(ws_app) as client, client.websocket_connect("/api/v1/tape/stream") as socket:
+        assert socket.receive_json()["type"] == "snapshot"
+        socket.close()
+
+
 async def _infra_ready() -> bool:
     """Probes gold + postgres + the synced projection, closing the probe pool it opens."""
     if not Path(core_settings.duckdb_gold_path).exists():
