@@ -19,7 +19,7 @@ say "checking required .env variables"
 missing=0
 for key in GLOOMBERG_DOMAIN MINIO_KEY MINIO_SECRET POSTGRES_USER POSTGRES_PASSWORD \
     GROQ_API_KEY GOOGLE_AI_STUDIO_API_KEY GLOOMBERG_API_TOKEN GLOOMBERG_ORCH_BACKEND_API_TOKEN; do
-    grep -qE "^${key}=." "$REPO/.env" || { echo "missing in .env: $key"; missing=1; }
+    grep -qE "^${key}[[:space:]]*=[[:space:]]*." "$REPO/.env" || { echo "missing in .env: $key"; missing=1; }
 done
 [ "$missing" -eq 0 ] || die "fill the variables above, then re-run"
 GLOOMBERG_DOMAIN="$(grep -E '^GLOOMBERG_DOMAIN=' "$REPO/.env" | head -1 | cut -d= -f2-)"
