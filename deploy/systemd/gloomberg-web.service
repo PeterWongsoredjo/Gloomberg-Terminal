@@ -1,0 +1,15 @@
+[Unit]
+Description=Gloomberg web terminal (next start, loopback)
+After=gloomberg-backend.service
+Wants=gloomberg-backend.service
+
+[Service]
+User=gloomberg
+WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/services/web-terminal
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

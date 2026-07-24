@@ -1,0 +1,15 @@
+[Unit]
+Description=Gloomberg serving API (uvicorn, exactly one process)
+After=gloomberg-infra.service
+Requires=gloomberg-infra.service
+
+[Service]
+User=gloomberg
+WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/services/backend-api
+EnvironmentFile=/opt/gloomberg/Gloomberg-Terminal/.env
+ExecStart=/home/gloomberg/.local/bin/uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

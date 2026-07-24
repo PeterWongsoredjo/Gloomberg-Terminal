@@ -1,0 +1,17 @@
+[Unit]
+Description=Gloomberg infra containers (Postgres, MinIO)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=gloomberg
+WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/infra
+ExecStart=/usr/bin/docker compose --env-file /opt/gloomberg/Gloomberg-Terminal/.env -f /opt/gloomberg/Gloomberg-Terminal/infra/docker-compose.yml up -d --wait
+ExecStop=/usr/bin/docker compose --env-file /opt/gloomberg/Gloomberg-Terminal/.env -f /opt/gloomberg/Gloomberg-Terminal/infra/docker-compose.yml stop
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# The single public listener. Everything behind it stays on loopback.
+{$GLOOMBERG_DOMAIN}
+
+encode zstd gzip
+
+# API and the tape WebSocket, upgrade handled automatically
+handle /api/* {
+	reverse_proxy 127.0.0.1:8000
+}
+
+# everything else is the web terminal
+handle {
+	reverse_proxy 127.0.0.1:3000
+}

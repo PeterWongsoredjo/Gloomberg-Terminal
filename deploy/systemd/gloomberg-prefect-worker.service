@@ -1,0 +1,19 @@
+[Unit]
+Description=Gloomberg Prefect worker (pool gloomberg-local)
+After=gloomberg-infra.service gloomberg-prefect-server.service
+Requires=gloomberg-infra.service
+Wants=gloomberg-prefect-server.service
+
+[Service]
+User=gloomberg
+WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/services/orchestration
+EnvironmentFile=/opt/gloomberg/Gloomberg-Terminal/.env
+Environment=PREFECT_API_URL=http://127.0.0.1:4200/api
+Environment=GLOOMBERG_ORCH_DIR=/opt/gloomberg/Gloomberg-Terminal/services/orchestration
+Environment=PATH=/home/gloomberg/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/gloomberg/.local/bin/uv run prefect worker start --pool gloomberg-local
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

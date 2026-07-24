@@ -1,0 +1,14 @@
+[Unit]
+Description=Gloomberg Prefect server (loopback control plane)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gloomberg
+WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/services/orchestration
+ExecStart=/home/gloomberg/.local/bin/uv run prefect server start --host 127.0.0.1 --port 4200
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,2 @@
+# Nightly Gloomberg backup, 02:30 server time, outside every flow window
+30 2 * * * root /opt/gloomberg/Gloomberg-Terminal/deploy/backup/gloomberg-backup.sh >> /var/log/gloomberg-backup.log 2>&1
