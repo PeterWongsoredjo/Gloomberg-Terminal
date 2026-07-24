@@ -25,7 +25,8 @@ select
     c.close_adj_idr,
     c.price_series_integrity,
     cast(c.trade_date as timestamp) as data_as_of,
-    coalesce(c.dq_flags, []::varchar[]) as dq_flags
+    c.dq_flags
 from {{ ref('dim_security') }} s
-left join last_close c on s.security_id = c.security_id
+-- a security enters the snapshot with its first priced close
+join last_close c on s.security_id = c.security_id
 where s.is_current
