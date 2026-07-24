@@ -9,7 +9,9 @@ Type=oneshot
 RemainAfterExit=yes
 User=gloomberg
 WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/infra
-ExecStart=/usr/bin/docker compose --env-file /opt/gloomberg/Gloomberg-Terminal/.env -f /opt/gloomberg/Gloomberg-Terminal/infra/docker-compose.yml up -d --wait
+# wait only on the durable services, the bucket init one-shot exits 0 and would trip --wait
+ExecStart=/usr/bin/docker compose --env-file /opt/gloomberg/Gloomberg-Terminal/.env -f /opt/gloomberg/Gloomberg-Terminal/infra/docker-compose.yml up -d --wait minio postgres
+ExecStart=/usr/bin/docker compose --env-file /opt/gloomberg/Gloomberg-Terminal/.env -f /opt/gloomberg/Gloomberg-Terminal/infra/docker-compose.yml up -d minio-init
 ExecStop=/usr/bin/docker compose --env-file /opt/gloomberg/Gloomberg-Terminal/.env -f /opt/gloomberg/Gloomberg-Terminal/infra/docker-compose.yml stop
 TimeoutStartSec=300
 
