@@ -21,6 +21,9 @@ models:
         data_tests: [not_null]
   - name: agg_pipeline_telemetry
     description: "Data Telemetry: coverage, quarantine counts, freshness per run."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [source, dataset, trade_date]
     columns:
       - name: data_as_of
         data_tests: [not_null]

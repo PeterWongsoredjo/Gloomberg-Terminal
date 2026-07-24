@@ -1,4 +1,4 @@
--- ingestion run coverage and freshness, one row per manifest
+-- current ingestion coverage, the newest run wins per feed and date
 select
     ingest_run_id,
     source,
@@ -12,3 +12,7 @@ select
     missing_tickers,
     completed_at
 from {{ ref('stg_manifests') }}
+qualify row_number() over (
+    partition by source, dataset, trade_date
+    order by completed_at desc, ingest_run_id desc
+) = 1
