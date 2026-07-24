@@ -29,11 +29,13 @@ select
     shares_before,
     shares_after,
     price_adjustment_required,
+    -- a rights issue factor needs a TERP no feed provides
+    (event_type <> 'RIGHTS_ISSUE') as factor_resolvable,
     case
         when event_type in ('STOCK_SPLIT', 'REVERSE_SPLIT', 'BONUS_SHARES', 'STOCK_DIVIDEND')
             and shares_before > 0 and shares_after > 0 and shares_before <> shares_after
             then (shares_before::decimal(38, 10) / shares_after)
         when event_type in ('DELISTING', 'RELISTING') then 1.0
-        else null  -- rights issue needs a TERP we cannot compute without subscription price
+        else null
     end as price_factor
 from calc

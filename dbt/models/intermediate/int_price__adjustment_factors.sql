@@ -13,7 +13,8 @@ scoped as (
     select
         d.ticker,
         d.trade_date,
-        e.price_factor
+        e.price_factor,
+        e.factor_resolvable
     from trade_dates d
     join events e
         on d.ticker = e.ticker
@@ -25,6 +26,7 @@ select
     trade_date,
     coalesce(exp(sum(ln(price_factor)) filter (where price_factor is not null)), 1.0)
         as cumulative_factor,
-    bool_or(price_factor is null) as has_pending_adjustment
+    bool_or(price_factor is null) as has_pending_adjustment,
+    bool_or(price_factor is null and factor_resolvable) as has_unsettled_adjustment
 from scoped
 group by ticker, trade_date
