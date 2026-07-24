@@ -1,6 +1,8 @@
 universe:
   - ticker: IHSG
     note: composite index, market-wide outlook subject, scored intraday only
+
+  # banks and liquid anchors
   - ticker: BBCA
     note: big-four bank, deepest liquidity, dense news flow
   - ticker: BBRI
@@ -9,7 +11,109 @@ universe:
     note: big-four bank, state-owned flow signal
   - ticker: BBNI
     note: big-four bank, state-owned
+  - ticker: ARTO
+    note: digital bank, high beta on tech and rate news
+  - ticker: BRIS
+    note: sharia bank bellwether
   - ticker: TLKM
     note: telco heavyweight, index anchor
   - ticker: ASII
     note: autos and heavy-equipment conglomerate
+  - ticker: UNTR
+    note: heavy equipment and coal proxy, big liquidity
+  - ticker: TOWR
+    note: telecom tower operator, steady flow
+  - ticker: AMRT
+    note: alfamart retail, liquid consumer read
+  - ticker: ICBP
+    note: packaged foods, consumer anchor
+
+  # prajogo pangestu
+  - ticker: BRPT
+    note: barito pacific, prajogo cluster parent
+  - ticker: TPIA
+    note: chandra asri, petrochemical flagship
+  - ticker: BREN
+    note: barito renewables, geothermal, msci mega-cap mover
+  - ticker: CUAN
+    note: petrindo coal, prajogo cluster, high velocity
+  - ticker: CDIA
+    note: chandra daya, hot 2025 ipo, prajogo cluster
+  - ticker: PTRO
+    note: petrosea mining services, prajogo cluster mover
+
+  # bakrie group
+  - ticker: BUMI
+    note: bumi resources coal, bakrie flagship, huge volume
+  - ticker: DEWA
+    note: darma henwa mining services, bakrie, gorengan
+  - ticker: VKTR
+    note: ev buses and batteries, bakrie-linked
+  - ticker: ENRG
+    note: energi mega persada, bakrie oil and gas
+  - ticker: BRMS
+    note: bumi resources minerals gold, bakrie, high volume
+
+  # gold, nickel and metals
+  - ticker: AMMN
+    note: amman mineral copper and gold, msci heavyweight
+  - ticker: ANTM
+    note: aneka tambang gold, very liquid metals name
+  - ticker: MDKA
+    note: merdeka copper gold
+  - ticker: MBMA
+    note: merdeka battery, ev nickel play
+  - ticker: INCO
+    note: vale indonesia nickel
+  - ticker: NCKL
+    note: harita nickel, downstream ev supply chain
+  - ticker: HRTA
+    note: hartadinata gold jewelry, liquid gorengan
+  - ticker: TINS
+    note: timah tin, high-volume metals mover
+
+  # coal and energy
+  - ticker: ADRO
+    note: alamtri, adaro thermal coal heavyweight
+  - ticker: ADMR
+    note: adaro minerals met coal, high volume
+  - ticker: PTBA
+    note: bukit asam, state coal
+  - ticker: ITMG
+    note: indo tambangraya coal
+  - ticker: HRUM
+    note: harum energy, coal pivoting to nickel
+  - ticker: RAJA
+    note: rukun raharja gas, energy momentum name
+  - ticker: INDY
+    note: indika energy, coal diversifying to ev and gold
+
+  # tech, digital and data center
+  - ticker: GOTO
+    note: goto tech bellwether, dense retail flow
+  - ticker: WIFI
+    note: surge digital infra, hot gorengan
+  - ticker: DCII
+    note: dci indonesia data center, explosive mover
+  - ticker: BUKA
+    note: bukalapak e-commerce
+  - ticker: EMTK
+    note: emtek group media and tech
+  - ticker: MTEL
+    note: mitratel tower infra
+
+  # infra and property
+  - ticker: SSIA
+    note: surya semesta construction and infrastructure
+  - ticker: PANI
+    note: pik2 property, aguan and salim, msci mega-mover
+  - ticker: CTRA
+    note: ciputra development property anchor
+
+  # petrochem, shipping and fresh ipo
+  - ticker: FPNI
+    note: lotte chemical titan petrochemical
+  - ticker: BULL
+    note: buana lintas lautan tanker shipping
+  - ticker: RATU
+    note: raharja energi cirebon, hot 2025 ipo
