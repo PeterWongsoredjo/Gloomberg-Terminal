@@ -15,6 +15,7 @@
         {"type": "FLOW", "ref_artifact_id": null, "value": "net_foreign negative"}
       ],
       "contradictions": [],
+      "watchpoints": [],
       "confidence": 0.62
     },
     "confidence": 0.62,

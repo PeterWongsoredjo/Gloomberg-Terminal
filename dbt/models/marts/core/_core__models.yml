@@ -147,18 +147,72 @@ models:
               to: ref('dim_trade_date')
               field: trade_date
 
-  - name: fct_sentiment
-    description: "Grain: one row per (security_id, trade_date, prompt_version); CT-009 landed."
+  - name: fct_article_sentiment
+    description: "Grain: one row per (item_id, prompt_version); one article's own verdict."
     data_tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [security_id, trade_date, prompt_version]
+          combination_of_columns: [item_id, prompt_version]
     columns:
-      - name: security_id
+      - name: item_id
+        data_tests: [not_null]
+      - name: sentiment_label
         data_tests:
           - not_null
-          - relationships:
-              to: ref('dim_security')
-              field: security_id
+          - accepted_values:
+              values: [BEARISH, NEUTRAL, BULLISH]
+      - name: sentiment_score
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -1
+              max_value: 1
+      - name: rationale
+        description: "Why the model scored it this way; null for anything scored before art-sent-v2."
+        data_tests:
+          - dbt_expectations.expect_column_value_lengths_to_be_between:
+              max_value: 400
+              row_condition: "rationale is not null"
+      - name: drivers
+        description: "Up to 3 evidence phrases lifted from the article, not an explanation."
+      - name: confidence
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+      - name: data_as_of
+        data_tests: [not_null]
+
+  - name: fct_article_ticker_sentiment
+    description: "Grain: one row per (item_id, ticker, prompt_version); an article's per-issuer read."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [item_id, ticker, prompt_version]
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+      - name: relevance
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [PRIMARY, SECONDARY, INCIDENTAL]
+      - name: sentiment_label
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [BEARISH, NEUTRAL, BULLISH]
+      - name: sentiment_score
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -1
+              max_value: 1
+
+  - name: fct_sentiment
+    description: "Grain: one row per (ticker, trade_date, prompt_version); rolled up from article sentiment."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [ticker, trade_date, prompt_version]
+    columns:
+      - name: ticker
+        data_tests: [not_null]
       - name: sentiment_label
         data_tests:
           - not_null
@@ -178,17 +232,17 @@ models:
         data_tests: [not_null]
 
   - name: fct_insight
-    description: "Grain: one row per (security_id, trade_date, prompt_version); CT-009 landed."
+    description: "Grain: one row per (ticker, trade_date, prompt_version); CT-009 landed."
     data_tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [security_id, trade_date, prompt_version]
+          combination_of_columns: [ticker, trade_date, prompt_version]
     columns:
-      - name: security_id
-        data_tests:
-          - not_null
-          - relationships:
-              to: ref('dim_security')
-              field: security_id
+      - name: ticker
+        data_tests: [not_null]
+      - name: contradictions
+        description: "Notes where the signals disagree, never averaged into one number."
+      - name: watchpoints
+        description: "What an end-of-day read leaves open for the next session; empty in session."
       - name: confidence
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:

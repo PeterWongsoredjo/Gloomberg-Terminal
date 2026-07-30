@@ -11,6 +11,7 @@ select
     cast(value.headline as varchar) as headline,
     cast(value.narrative as varchar) as narrative,
     cast(value.contradictions as varchar[]) as contradictions,
+    cast(value.watchpoints as varchar[]) as watchpoints,
     cast(confidence as double) as confidence,
     cast(quality_flags as varchar[]) as quality_flags,
     cast(generated_at as timestamp) as generated_at,

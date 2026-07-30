@@ -97,6 +97,9 @@ sources:
       - name: sentiment
         meta:
           external_location: "read_json('s3://gloomberg-bronze/agent_artifact/sentiment/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"
+      - name: article_sentiment
+        meta:
+          external_location: "{% raw %}read_json('s3://gloomberg-bronze/agent_artifact/article_sentiment/*/*/*.json.zst', hive_partitioning=true, filename=true, columns={{artifact_id: 'VARCHAR', run_id: 'VARCHAR', artifact_type: 'VARCHAR', security_id: 'BIGINT', ticker: 'VARCHAR', window_from: 'DATE', window_to: 'DATE', value: 'STRUCT(item_id VARCHAR, sentiment_score DOUBLE, sentiment_label VARCHAR, drivers VARCHAR[], ticker_sentiments STRUCT(ticker VARCHAR, sentiment_score DOUBLE, sentiment_label VARCHAR, relevance VARCHAR)[], dropped_tickers VARCHAR[], self_confidence DOUBLE)', confidence: 'DOUBLE', quality_flags: 'VARCHAR[]', provider: 'VARCHAR', model: 'VARCHAR', prompt_version: 'VARCHAR', generated_at: 'VARCHAR'}}){% endraw %}"
       - name: insight
         meta:
           external_location: "read_json('s3://gloomberg-bronze/agent_artifact/insight/*/*/*.json.zst', hive_partitioning=true, format='auto', union_by_name=true, filename=true)"

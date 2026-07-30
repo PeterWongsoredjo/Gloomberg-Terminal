@@ -2,11 +2,10 @@
     config(
         materialized='incremental',
         incremental_strategy='delete+insert',
-        unique_key=['security_id', 'trade_date', 'prompt_version'],
+        unique_key=['ticker', 'trade_date', 'prompt_version'],
         on_schema_change='fail',
     )
 }}
--- grain: one row per (security_id, trade_date, prompt_version); the latest synthesis wins
 with artifacts as (
     select * from {{ ref('stg_agent_artifact__insight') }}
 ),
@@ -25,17 +24,18 @@ resolved as (
         a.headline,
         a.narrative,
         a.contradictions,
+        a.watchpoints,
         a.confidence,
         a.provider,
         a.model,
         a.generated_at,
         a.quality_flags as dq_flags,
         row_number() over (
-            partition by s.security_id, a.window_from, a.prompt_version
+            partition by a.ticker, a.window_from, a.prompt_version
             order by a.generated_at desc
         ) as _rn
     from artifacts a
-    join security s
+    left join security s
         on a.ticker = s.ticker
         and a.window_from >= cast(s.effective_from as date)
         and (s.effective_to is null or a.window_from < cast(s.effective_to as date))
@@ -50,6 +50,7 @@ select
     headline,
     narrative,
     contradictions,
+    watchpoints,
     confidence,
     provider,
     model,
