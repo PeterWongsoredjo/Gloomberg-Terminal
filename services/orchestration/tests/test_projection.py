@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import psycopg
 import pytest
 
 from pipeline.config import get_settings
+from pipeline.reference.matcher import Registry
+from pipeline.reference.securities import load_baseline
 
-from orchestration.projection import prune, upsert_items
+from orchestration.projection import pending_count, prune, retag_items, upsert_items
 
-TD = date(2026, 7, 14)
+TD = date(2099, 1, 1)
+PRUNE_TD = date(2026, 7, 14)
+PRUNE_OLD_TD = date(2026, 6, 1)
 _PREFIX = "testproj:"
 
 
@@ -76,10 +80,48 @@ def test_reupsert_never_touches_scoring_state(dsn: str) -> None:
     assert row is not None and row[0] is not None and row[1] == 2
 
 
+def test_retag_rewrites_tags_that_predate_the_registry(dsn: str) -> None:
+    """A registry refresh re-resolves stored articles instead of leaving stale tags."""
+    stale = _item("stale", ["WRNG"])
+    stale["title"] = "Krakatau Steel Ungkap Penyebab Kebakaran"
+    upsert_items(dsn, [stale], TD, "ING1")
+    refreshed_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+
+    assert retag_items(dsn, Registry(load_baseline()), refreshed_at) >= 1
+
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "select tickers, tagged_at from intraday.news_item where item_id = %s",
+            (f"{_PREFIX}stale",),
+        ).fetchone()
+    assert row is not None and row[0] == ["KRAS"] and row[1] == refreshed_at
+
+
+def test_retag_leaves_items_tagged_after_the_refresh_alone(dsn: str) -> None:
+    """Freshly polled articles are already current, so they are not touched again."""
+    upsert_items(dsn, [_item("fresh", ["BBCA"])], TD, "ING1")
+    long_ago = datetime.now(timezone.utc) - timedelta(days=1)
+
+    assert retag_items(dsn, Registry(load_baseline()), long_ago) == 0
+
+
+def test_pending_count_tracks_what_still_needs_scoring(dsn: str) -> None:
+    """The intraday trigger reads this to decide whether a run is worth dispatching."""
+    upsert_items(dsn, [_item("p1"), _item("p2")], TD, "ING1")
+    assert pending_count(dsn, TD) >= 2
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute(
+            "update intraday.news_item set score_status = 'SCORED' where item_id like %s",
+            (f"{_PREFIX}%",),
+        )
+    assert pending_count(dsn, TD) == 0
+
+
 def test_prune_drops_only_old_rows(dsn: str) -> None:
-    upsert_items(dsn, [_item("old")], date(2026, 6, 1), "ING1")
-    upsert_items(dsn, [_item("new")], TD, "ING1")
-    prune(dsn, TD, keep_days=14)
+    upsert_items(dsn, [_item("old")], PRUNE_OLD_TD, "ING1")
+    upsert_items(dsn, [_item("new")], PRUNE_TD, "ING1")
+    prune(dsn, PRUNE_TD, keep_days=14)
     with psycopg.connect(dsn) as conn:
         rows = conn.execute(
             "select item_id from intraday.news_item where item_id like %s", (f"{_PREFIX}%",)

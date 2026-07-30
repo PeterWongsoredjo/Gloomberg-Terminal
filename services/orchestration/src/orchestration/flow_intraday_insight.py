@@ -1,10 +1,7 @@
 """
 intraday_insight :
 
-session guard -> trigger one insight run over the full curated universe -> finalize.
-
-A periodic refresh, never news-triggered: every open-session tick dispatches
-unconditionally. Outside an open session the whole run is a SKIP, never a failure.
+session guard -> pick the subjects whose news moved -> trigger one insight run -> finalize.
 """
 
 from __future__ import annotations
@@ -25,6 +22,7 @@ from orchestration.phases import rollup, run_phase
 from orchestration.results import PhaseResult
 from orchestration.tasks.finalize import finalize_run
 from orchestration.tasks.session_guard import guard_open_session
+from orchestration.tasks.subjects import insight_subjects
 from orchestration.tasks.trigger import trigger_intraday_insight
 
 
@@ -37,13 +35,18 @@ def _degrade_on_trigger_failure(exc: Exception) -> PhaseResult | None:
 def _trigger_result(
     dsn: str, flow_run_id: str, td: date, config: OrchestrationConfig
 ) -> PhaseResult:
-    """Dispatches the hourly insight run, or skips visibly when no universe is curated."""
-    if not config.subject_universe:
-        skip = PhaseResult(status="SKIPPED", notes="universe empty, insight trigger skipped")
+    """Refreshes only the subjects whose news moved, so a quiet hour costs nothing."""
+    subjects = run_phase(
+        dsn, flow_run_id, td, "insight_subjects",
+        lambda: insight_subjects(td, config.insight_subject_cap, config.subject_universe),
+    )
+    tickers = list(subjects.payload or [])
+    if not tickers:
+        skip = PhaseResult(status="SKIPPED", notes=f"nothing to refresh: {subjects.notes}")
         return run_phase(dsn, flow_run_id, td, "trigger_insight", lambda: skip)
     return run_phase(
         dsn, flow_run_id, td, "trigger_insight",
-        lambda: trigger_intraday_insight(td, config.subject_universe, config),
+        lambda: trigger_intraday_insight(td, tickers, config),
         on_error=_degrade_on_trigger_failure,
     )
 

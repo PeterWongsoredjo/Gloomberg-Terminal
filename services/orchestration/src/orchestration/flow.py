@@ -9,7 +9,6 @@ a failed phase emits its event and does not silently cascade
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import date
 from typing import Any
 
@@ -27,13 +26,15 @@ from orchestration.errors import TriggerPermanentError, TriggerTransientError
 from orchestration.phases import rollup, run_phase
 from orchestration.results import PhaseResult
 from orchestration.tasks.coverage import coverage_gate
-from orchestration.tasks.dbt_build import dbt_build
+from orchestration.tasks.dbt_build import INSIGHT_PHASES, dbt_build
 from orchestration.tasks.finalize import finalize_run
+from orchestration.tasks.gold_sources import land_agent_artifacts, normalize_news
 from orchestration.tasks.guard import guard_trading_day
 from orchestration.tasks.ingest import ingest_feed, land_failed, load_fixtures_bronze
 from orchestration.tasks.promote import promote_gold
-from orchestration.tasks.trigger import trigger_agentic
-from orchestration.universe import equities
+from orchestration.tasks.registry import refresh_registry, retag_news
+from orchestration.tasks.subjects import eod_insight_subjects
+from orchestration.tasks.trigger import trigger_eod_insight
 
 
 def _fixture_roots() -> list[str]:
@@ -77,16 +78,59 @@ def _degrade_on_trigger_failure(exc: Exception) -> PhaseResult | None:
     return None
 
 
-def _trigger_result(dsn: str, flow_run_id: str, td: date, config: OrchestrationConfig) -> PhaseResult:
-    """Triggers the EOD agentic run over equities, or skips visibly when none are curated."""
-    tickers = equities(config.subject_universe)
+def _degrade_on_registry_failure(exc: Exception) -> PhaseResult | None:
+    """The registry already in Postgres stays live, so the build carries on."""
+    return PhaseResult(status="DEGRADED", notes=f"registry refresh failed: {exc}")
+
+
+def _degrade_on_landing_failure(exc: Exception) -> PhaseResult | None:
+    """A missing landing costs one day of Gold news, not the whole build."""
+    return PhaseResult(status="DEGRADED", notes=f"bronze landing failed: {exc}")
+
+
+def _degrade_on_insight_build_failure(exc: Exception) -> PhaseResult | None:
+    """The panel already serves the conclusion from Postgres, so only Gold history lags."""
+    return PhaseResult(status="DEGRADED", notes=f"insight rebuild failed: {exc}")
+
+
+def _eod_insight_result(
+    dsn: str, flow_run_id: str, td: date, config: OrchestrationConfig
+) -> PhaseResult:
+    """Concludes the closed session, then folds that conclusion into Gold in the same run."""
+    subjects = run_phase(
+        dsn, flow_run_id, td, "eod_insight_subjects",
+        lambda: eod_insight_subjects(td, config.eod_insight_subject_cap, config.subject_universe),
+    )
+    tickers = list(subjects.payload or [])
     if not tickers:
-        skip = PhaseResult(status="SKIPPED", notes="no curated equities, agentic trigger skipped")
-        return run_phase(dsn, flow_run_id, td, "trigger_agentic", lambda: skip)
-    eod_config = replace(config, subject_universe=tickers)
-    return run_phase(
-        dsn, flow_run_id, td, "trigger_agentic",
-        lambda: trigger_agentic(td, eod_config), on_error=_degrade_on_trigger_failure,
+        skip = PhaseResult(status="SKIPPED", notes=f"no conclusion owed: {subjects.notes}")
+        return run_phase(dsn, flow_run_id, td, "trigger_eod_insight", lambda: skip)
+
+    trigger = run_phase(
+        dsn, flow_run_id, td, "trigger_eod_insight",
+        lambda: trigger_eod_insight(td, tickers, config),
+        on_error=_degrade_on_trigger_failure,
+    )
+    if trigger.status not in ("SUCCESS", "PARTIAL"):
+        return trigger
+
+    # only this run can land it, tomorrow lands tomorrow
+    landing = run_phase(
+        dsn, flow_run_id, td, "land_eod_insight",
+        lambda: land_agent_artifacts(td), on_error=_degrade_on_landing_failure,
+    )
+    build = run_phase(
+        dsn, flow_run_id, td, "dbt_build_insight",
+        lambda: dbt_build(config, INSIGHT_PHASES), on_error=_degrade_on_insight_build_failure,
+    )
+    promote = run_phase(
+        dsn, flow_run_id, td, "promote_insight",
+        lambda: promote_gold(), on_error=_degrade_on_insight_build_failure,
+    )
+    return PhaseResult(
+        status=rollup(trigger.status, landing.status, build.status, promote.status),
+        run_id=trigger.run_id,
+        notes=f"{len(tickers)} subjects concluded and rebuilt into Gold",
     )
 
 
@@ -94,11 +138,9 @@ _TASK_RUNNER: ThreadPoolTaskRunner[Any] = ThreadPoolTaskRunner(max_workers=2)
 
 
 @flow(name="gloomberg_daily_flow", task_runner=_TASK_RUNNER)  # type: ignore[arg-type]
-def gloomberg_daily_flow(trade_date: str | None = None, objective: str | None = None) -> str:
+def gloomberg_daily_flow(trade_date: str | None = None) -> str:
     """Runs the calendar-aware daily cycle for one WIB trade_date; returns the run status."""
     config = get_config()
-    if objective:
-        config = replace(config, objective=objective)
     td = coerce_date(trade_date)
     dsn = get_settings().postgres_dsn
     flow_run_id = str(flow_run.id) if flow_run.id else "local"
@@ -112,6 +154,11 @@ def gloomberg_daily_flow(trade_date: str | None = None, objective: str | None = 
             return overall
 
         ingest = run_phase(dsn, flow_run_id, td, "ingest", lambda: _ingest_result(td, config))
+        run_phase(
+            dsn, flow_run_id, td, "refresh_registry", refresh_registry,
+            on_error=_degrade_on_registry_failure,
+        )
+        run_phase(dsn, flow_run_id, td, "retag_news", retag_news, on_error=_degrade_on_registry_failure)
         gate = run_phase(
             dsn,
             flow_run_id,
@@ -123,11 +170,23 @@ def gloomberg_daily_flow(trade_date: str | None = None, objective: str | None = 
             overall = "FAILED"  # below hard minimum; prior Gold stays live
             return overall
 
+        landings = [
+            run_phase(
+                dsn, flow_run_id, td, "normalize_news",
+                lambda: normalize_news(td), on_error=_degrade_on_landing_failure,
+            ),
+            run_phase(
+                dsn, flow_run_id, td, "land_artifacts",
+                lambda: land_agent_artifacts(td), on_error=_degrade_on_landing_failure,
+            ),
+        ]
         run_phase(dsn, flow_run_id, td, "dbt_build", lambda: dbt_build(config))
         run_phase(dsn, flow_run_id, td, "promote", lambda: promote_gold())
-        trigger = _trigger_result(dsn, flow_run_id, td, config)
 
-        overall = rollup(gate.status, trigger.status)
+        # after promote, so it reads the closes the day settled on
+        insight = _eod_insight_result(dsn, flow_run_id, td, config)
+
+        overall = rollup(gate.status, insight.status, *(landing.status for landing in landings))
         return overall
     except Exception:
         overall = "FAILED"

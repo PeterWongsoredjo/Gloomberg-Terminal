@@ -61,12 +61,11 @@ def _ingest_news(td: date) -> PhaseResult:
     return ingest_news_result(manifests)
 
 
-def scoring_universe(payload: dict[str, Any] | None, cap: int, universe: list[str]) -> list[str]:
-    """The curated tickers tagged on this poll's new items, capped for the fan-out."""
-    if not payload or not payload.get("new_items"):
-        return []
-    curated = set(universe)
-    return [str(t) for t in payload.get("tickers") or [] if str(t) in curated][:cap]
+def pending_articles(payload: dict[str, Any] | None) -> int:
+    """How many of the day's articles still need scoring after this poll."""
+    if not payload:
+        return 0
+    return int(payload.get("pending") or 0)
 
 
 def _degrade_on_projection_failure(exc: Exception) -> PhaseResult | None:
@@ -82,17 +81,17 @@ def _degrade_on_trigger_failure(exc: Exception) -> PhaseResult | None:
 def _trigger_result(
     dsn: str, flow_run_id: str, td: date, project: PhaseResult, config: OrchestrationConfig
 ) -> PhaseResult:
-    """Triggers scoring only when the projection landed something new and tagged."""
+    """Triggers scoring whenever any article is still unscored, universe or not."""
     if project.status != "SUCCESS":
         skip = PhaseResult(status="SKIPPED", notes="projection unavailable, scoring skipped")
         return run_phase(dsn, flow_run_id, td, "trigger_intraday", lambda: skip)
-    tickers = scoring_universe(project.payload, config.intraday_universe_cap, config.subject_universe)
-    if not tickers:
-        skip = PhaseResult(status="SKIPPED", notes="no new tagged items in universe, trigger skipped")
+    pending = pending_articles(project.payload)
+    if not pending:
+        skip = PhaseResult(status="SKIPPED", notes="no unscored articles, trigger skipped")
         return run_phase(dsn, flow_run_id, td, "trigger_intraday", lambda: skip)
     return run_phase(
         dsn, flow_run_id, td, "trigger_intraday",
-        lambda: trigger_intraday(td, tickers, config), on_error=_degrade_on_trigger_failure,
+        lambda: trigger_intraday(td, [], config), on_error=_degrade_on_trigger_failure,
     )
 
 

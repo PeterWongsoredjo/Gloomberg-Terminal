@@ -9,18 +9,16 @@ pull:
 deployments:
   - name: gloomberg-daily
     entrypoint: src/orchestration/flow.py:gloomberg_daily_flow
-    description: "The OR-01 daily medallion cycle (guard -> ingest -> gate -> dbt -> promote -> trigger)."
+    description: "The daily medallion cycle (guard -> ingest -> registry -> gate -> land -> dbt -> promote -> eod insight). EOD sentiment is a dbt rollup; the one LLM call is the close-of-day insight, which lands and rebuilds itself."
     work_pool:
       name: gloomberg-local        # concurrency limits set by setup_prefect.py
     schedules:
       - cron: "0 17 * * 1-5"        # WIB EOD buffer past the close, guard skips holidays
         timezone: "Asia/Jakarta"
-    parameters:
-      objective: "daily_sentiment"
 
   - name: gloomberg-intraday-news
     entrypoint: src/orchestration/flow_intraday.py:intraday_news_flow
-    description: "In-session 15-minute news poll: land RSS, project new items, score intraday sentiment."
+    description: "In-session 15-minute news poll: land RSS, tag against the registry, score every unscored article."
     work_pool:
       name: gloomberg-local
     schedules:
@@ -30,10 +28,19 @@ deployments:
 
   - name: gloomberg-intraday-insight
     entrypoint: src/orchestration/flow_intraday_insight.py:intraday_insight_flow
-    description: "In-session hourly insight refresh over the full curated universe (cadence is quota math, do not shorten casually)."
+    description: "In-session hourly insight refresh, incremental: only subjects whose articles changed since their last insight."
     work_pool:
       name: gloomberg-local
     schedules:
-      - interval: 3600             # hourly keeps the provider budget safe (~300 req/day at 50 tickers)
+      - interval: 3600             # ~8 subjects a tick, and a quiet hour dispatches nothing
         anchor_date: "2026-01-01T09:05:00"
+        timezone: "Asia/Jakarta"
+
+  - name: gloomberg-backfill
+    entrypoint: src/orchestration/flow_backfill.py:backfill_sentiment_flow
+    description: "Overnight drain of the unscored article backlog across the retained window, oldest day first."
+    work_pool:
+      name: gloomberg-local
+    schedules:
+      - cron: "0 2 * * *"           # ahead of the backup cron, sessions long closed
         timezone: "Asia/Jakarta"

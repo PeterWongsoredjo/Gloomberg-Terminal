@@ -31,6 +31,13 @@ PHASES: list[tuple[str, list[str]]] = [
     ("test", ["test"]),
 ]
 
+# just the insight lineage, for the second pass at the close
+INSIGHT_PHASES: list[tuple[str, list[str]]] = [
+    ("staging", ["run", "--select", "stg_agent_artifact__insight"]),
+    ("marts_core", ["run", "--select", "fct_insight"]),
+    ("test", ["test", "--select", "fct_insight"]),
+]
+
 # stderr signatures that mean "retry once", not "a real error"
 _TRANSIENT_SIGNATURES = (
     "conflicting lock",
@@ -109,12 +116,14 @@ def _status_counts(run_results: dict[str, Any] | None) -> dict[str, int]:
     retry_delay_seconds=DBT_DELAY_SECONDS,
     retry_condition_fn=retry_on_transient_dbt,
 )
-def dbt_build(config: OrchestrationConfig) -> PhaseResult:
-    """Runs every dbt phase in order; any error-severity failure aborts before promotion."""
+def dbt_build(
+    config: OrchestrationConfig, phases: list[tuple[str, list[str]]] | None = None
+) -> PhaseResult:
+    """Runs the given dbt phases in order; any error-severity failure aborts before promotion."""
     load_root_env()
     last_invocation: str | None = None
     test_counts: dict[str, int] = {}
-    for name, args in PHASES:
+    for name, args in phases or PHASES:
         run = _run_dbt(config.dbt_dir, args)
         _classify(name, run)
         if run.run_results is not None:

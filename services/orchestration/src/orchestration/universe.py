@@ -13,13 +13,7 @@ logger = logging.getLogger(__name__)
 
 _TICKER_RE = re.compile(r"^[A-Z]{4}$")
 
-# index subjects score intraday only, Gold sentiment is security-keyed
 INDEX_SUBJECTS = frozenset({"IHSG"})
-
-
-def equities(universe: list[str]) -> list[str]:
-    """The universe minus index subjects, for the security-keyed EOD run."""
-    return [t for t in universe if t not in INDEX_SUBJECTS]
 
 
 def _ticker_of(entry: Any) -> str | None:

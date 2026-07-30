@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from orchestration.universe import INDEX_SUBJECTS, equities, load_universe
+from orchestration.universe import INDEX_SUBJECTS, load_universe
 
 _GOOD = """universe:
   - ticker: BBCA
@@ -56,8 +56,6 @@ def test_committed_universe_file_is_valid() -> None:
     assert "IHSG" in tickers
 
 
-def test_equities_drops_index_subjects_only() -> None:
+def test_the_index_is_a_recognised_subject() -> None:
+    """IHSG has no dim_security row, so it needs naming somewhere to stay scoreable."""
     assert "IHSG" in INDEX_SUBJECTS
-    assert equities(["IHSG", "BBCA", "TLKM"]) == ["BBCA", "TLKM"]
-    assert equities(["IHSG"]) == []
-    assert equities([]) == []

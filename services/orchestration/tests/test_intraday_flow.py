@@ -7,7 +7,7 @@ from orchestration.flow_intraday import (
     _degrade_on_projection_failure,
     _degrade_on_trigger_failure,
     ingest_news_result,
-    scoring_universe,
+    pending_articles,
 )
 from orchestration.phases import rollup
 from orchestration.tasks.session_guard import guard_open_session
@@ -44,7 +44,6 @@ def _config(tmp_path: Path) -> OrchestrationConfig:
         poll_timeout_seconds=1.0,
         trigger_timeout_seconds=1.0,
         eod_cron="0 17 * * 1-5",
-        objective="daily_sentiment",
         session_windows=windows,
     )
 
@@ -70,33 +69,19 @@ def test_ingest_none_landed_is_failed() -> None:
     assert result.ingest_run_id is None
 
 
-_CURATED = ["BBCA", "TLKM", "ASII"]
+def test_scoring_is_driven_by_the_unscored_backlog() -> None:
+    """Any pending article triggers a run, whether or not it is in the curated universe."""
+    assert pending_articles({"new_items": [], "tickers": [], "pending": 12}) == 12
 
 
-def test_universe_comes_from_new_items() -> None:
-    payload = {"new_items": ["a", "b"], "tickers": ["BBCA", "TLKM"]}
-    assert scoring_universe(payload, 16, _CURATED) == ["BBCA", "TLKM"]
+def test_no_backlog_means_no_run() -> None:
+    assert pending_articles({"new_items": ["a"], "tickers": ["BBCA"], "pending": 0}) == 0
+    assert pending_articles(None) == 0
 
 
-def test_universe_is_capped() -> None:
-    tickers = [f"TC{i:02d}" for i in range(20)]
-    payload = {"new_items": ["a"], "tickers": tickers}
-    assert len(scoring_universe(payload, 16, tickers)) == 16
-
-
-def test_universe_empty_without_new_items() -> None:
-    assert scoring_universe({"new_items": [], "tickers": ["BBCA"]}, 16, _CURATED) == []
-    assert scoring_universe(None, 16, _CURATED) == []
-
-
-def test_universe_intersects_with_curated_list() -> None:
-    payload = {"new_items": ["a"], "tickers": ["BBCA", "GOTO", "ASII"]}
-    assert scoring_universe(payload, 16, _CURATED) == ["BBCA", "ASII"]
-
-
-def test_empty_curated_universe_scores_nothing() -> None:
-    payload = {"new_items": ["a"], "tickers": ["BBCA"]}
-    assert scoring_universe(payload, 16, []) == []
+def test_an_untagged_article_still_earns_a_run() -> None:
+    """Two thirds of the live feed names no issuer; it must still be scored."""
+    assert pending_articles({"new_items": ["a"], "tickers": [], "pending": 1}) == 1
 
 
 def test_projection_failure_degrades() -> None:

@@ -93,17 +93,6 @@ class TriggerClient:
 
 
 @task(
-    name="trigger_agentic",
-    retries=TRIGGER_RETRIES,
-    retry_delay_seconds=TRIGGER_BACKOFF,
-    retry_jitter_factor=TRIGGER_JITTER,
-    retry_condition_fn=retry_on_transient_trigger,
-)
-def trigger_agentic(trade_date: date, config: OrchestrationConfig) -> PhaseResult:
-    return _launch_and_poll(config, config.objective, trade_date, config.subject_universe)
-
-
-@task(
     name="trigger_intraday",
     retries=TRIGGER_RETRIES,
     retry_delay_seconds=TRIGGER_BACKOFF,
@@ -125,6 +114,19 @@ def trigger_intraday_insight(
     trade_date: date, tickers: list[str], config: OrchestrationConfig
 ) -> PhaseResult:
     return _launch_and_poll(config, config.intraday_insight_objective, trade_date, tickers)
+
+
+@task(
+    name="trigger_eod_insight",
+    retries=TRIGGER_RETRIES,
+    retry_delay_seconds=TRIGGER_BACKOFF,
+    retry_jitter_factor=TRIGGER_JITTER,
+    retry_condition_fn=retry_on_transient_trigger,
+)
+def trigger_eod_insight(
+    trade_date: date, tickers: list[str], config: OrchestrationConfig
+) -> PhaseResult:
+    return _launch_and_poll(config, config.eod_insight_objective, trade_date, tickers)
 
 
 def _launch_and_poll(

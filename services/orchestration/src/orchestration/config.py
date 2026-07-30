@@ -27,11 +27,12 @@ class OrchestrationConfig:
     poll_timeout_seconds: float
     trigger_timeout_seconds: float
     eod_cron: str
-    objective: str
     session_windows: Path = REPO_ROOT / "services" / "backend-api" / "app" / "observability" / "config" / "session_windows.yaml"
-    intraday_objective: str = "intraday_sentiment"
+    intraday_objective: str = "article_sentiment"
     intraday_insight_objective: str = "intraday_insight"
-    intraday_universe_cap: int = 16
+    eod_insight_objective: str = "insight_synthesis"
+    insight_subject_cap: int = 8
+    eod_insight_subject_cap: int = 12
     universe_file: Path = DEFAULT_UNIVERSE_FILE
     subject_universe: list[str] = field(default_factory=list)
 
@@ -56,7 +57,6 @@ def get_config() -> OrchestrationConfig:
         poll_timeout_seconds=float(os.environ.get("GLOOMBERG_ORCH_POLL_TIMEOUT", "600")),
         trigger_timeout_seconds=float(os.environ.get("GLOOMBERG_ORCH_TRIGGER_TIMEOUT", "10")),
         eod_cron=os.environ.get("GLOOMBERG_ORCH_EOD_CRON", "0 17 * * 1-5"),
-        objective=os.environ.get("GLOOMBERG_ORCH_OBJECTIVE", "daily_sentiment"),
         session_windows=Path(
             os.environ.get(
                 "GLOOMBERG_ORCH_SESSION_WINDOWS",
@@ -66,11 +66,15 @@ def get_config() -> OrchestrationConfig:
                 ),
             )
         ),
-        intraday_objective=os.environ.get("GLOOMBERG_ORCH_INTRADAY_OBJECTIVE", "intraday_sentiment"),
+        intraday_objective=os.environ.get("GLOOMBERG_ORCH_INTRADAY_OBJECTIVE", "article_sentiment"),
         intraday_insight_objective=os.environ.get(
             "GLOOMBERG_ORCH_INTRADAY_INSIGHT_OBJECTIVE", "intraday_insight"
         ),
-        intraday_universe_cap=int(os.environ.get("GLOOMBERG_ORCH_INTRADAY_UNIVERSE_CAP", "16")),
+        eod_insight_objective=os.environ.get(
+            "GLOOMBERG_ORCH_EOD_INSIGHT_OBJECTIVE", "insight_synthesis"
+        ),
+        insight_subject_cap=int(os.environ.get("GLOOMBERG_ORCH_INSIGHT_SUBJECT_CAP", "8")),
+        eod_insight_subject_cap=int(os.environ.get("GLOOMBERG_ORCH_EOD_INSIGHT_SUBJECT_CAP", "12")),
         universe_file=universe_file,
         subject_universe=load_universe(universe_file),
     )
