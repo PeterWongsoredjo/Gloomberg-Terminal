@@ -13,8 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.enums import QualityFlag
 
 SentimentLabel = Literal["BEARISH", "NEUTRAL", "BULLISH"]
-ArtifactType = Literal["SENTIMENT", "EXTRACTION", "SUMMARY", "INSIGHT"]
+ArtifactType = Literal["SENTIMENT", "ARTICLE_SENTIMENT", "EXTRACTION", "SUMMARY", "INSIGHT"]
 Verdict = Literal["ACCEPT", "OPTIMIZE", "REJECT"]
+
+TickerRelevance = Literal["PRIMARY", "SECONDARY", "INCIDENTAL"]
 
 # corporate-action enum plus the extraction escape hatch
 EventType = Literal[
@@ -46,6 +48,40 @@ class SentimentValue(_Strict):
     self_confidence: float = Field(ge=0.0, le=1.0)
 
 
+class TickerSentiment(_Strict):
+    """How one article reads for one issuer it names."""
+
+    ticker: str = Field(pattern=r"^[A-Z]{4}$")
+    sentiment_score: float = Field(ge=-1.0, le=1.0)
+    sentiment_label: SentimentLabel
+    relevance: TickerRelevance
+
+
+class ArticleVerdict(_Strict):
+    """One article's own read, plus the per-issuer breakdown inside it."""
+
+    item_id: str
+    sentiment_score: float = Field(ge=-1.0, le=1.0)
+    sentiment_label: SentimentLabel
+    # absent on older verdicts, never invented
+    rationale: str | None = Field(default=None, max_length=400)
+    drivers: list[str] = Field(default_factory=list, max_length=3)
+    ticker_sentiments: list[TickerSentiment] = Field(default_factory=list, max_length=6)
+    self_confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ArticleSentimentBatch(_Strict):
+    """What one batched request returns: a verdict per article it was handed."""
+
+    verdicts: list[ArticleVerdict] = Field(default_factory=list, max_length=16)
+
+
+class ArticleSentimentValue(ArticleVerdict):
+    """One article's verdict as a stored artifact, with the tickers we refused to trust."""
+
+    dropped_tickers: list[str] = Field(default_factory=list)
+
+
 class Event(_Strict):
     event_type: EventType
     security_id: int | None = None
@@ -70,6 +106,8 @@ class InsightValue(_Strict):
     narrative: str
     signals: list[InsightSignal] = Field(default_factory=list)
     contradictions: list[str] = Field(default_factory=list)
+    # what the close of day leaves open, empty in session
+    watchpoints: list[str] = Field(default_factory=list, max_length=6)
     confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -123,7 +161,7 @@ class Ct009Artifact(_Strict):
     artifact_type: ArtifactType
     subject: Subject
     window: Window
-    value: SentimentValue | ExtractionValue | InsightValue
+    value: SentimentValue | ArticleSentimentValue | ExtractionValue | InsightValue
     confidence: float = Field(ge=0.0, le=1.0)
     provenance: Provenance
     quality_flags: list[QualityFlag] = Field(default_factory=list)

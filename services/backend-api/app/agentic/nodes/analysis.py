@@ -14,18 +14,62 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, ValidationError
 
 from app.agentic import cache
+from app.agentic.config import AgenticSettings
 from app.agentic.nodes._common import get_deps, item_ids, newest, news_for_ticker, user_payload
 from app.agentic.objectives import spec_for
 from app.agentic.prompts.registry import PromptTemplate, get_prompt
 from app.agentic.providers.base import ProviderError, ProviderRequest
 from app.agentic.providers.ladder import ProviderLadder
+from app.agentic.resolver import EntityResolver
 from app.agentic.state import AgentState, budget_delta
+from app.agentic.warehouse import GoldReader
 
 
-def _tasks(state: AgentState, prompt: PromptTemplate, news_cap: int) -> list[dict[str, Any]]:
+def _article_payload(item: dict[str, Any]) -> dict[str, Any]:
+    """Only the fields the model needs to judge one article."""
+    return {
+        "item_id": item["item_id"],
+        "title": item.get("title"),
+        "summary": item.get("summary"),
+        "published_at": str(item.get("published_at") or ""),
+        "source": item.get("source"),
+        "candidate_tickers": list(item.get("tickers") or []),
+    }
+
+
+def _batch_tasks(state: AgentState, batch_size: int, correction: list[str]) -> list[dict[str, Any]]:
+    """One task per chunk of articles; each request returns a verdict for every article in it."""
+    items = state["context"]["news_items"]
+    tasks = []
+    for start in range(0, len(items), batch_size):
+        chunk = items[start : start + batch_size]
+        payload = {"articles": [_article_payload(i) for i in chunk], "correction": correction}
+        tasks.append(
+            {
+                "subject": {"ticker": None, "security_id": None},
+                "user": user_payload(payload),
+                "pool": sorted(item_ids(chunk)),
+            }
+        )
+    return tasks
+
+
+def _subject_rows(state: AgentState) -> list[dict[str, Any]]:
+    """Every resolved subject, carrying its Gold row when Gold happens to have one."""
+    by_ticker = {str(row["ticker"]): row for row in state["context"]["market_context"]}
+    return [
+        by_ticker.get(ticker, {"ticker": ticker, "security_id": None, "market_context_available": False})
+        for ticker in state["subject_universe"]
+    ]
+
+
+def _tasks(state: AgentState, settings: AgenticSettings) -> list[dict[str, Any]]:
     objective = state["objective"]
     context = state["context"]
+    news_cap = settings.max_news_per_subject
     correction = (state["working"].get("evaluation") or {}).get("reasons", [])
+    if objective == "article_sentiment":
+        return _batch_tasks(state, settings.article_batch_size, correction)
     if objective == "deep_extraction":
         payload = {
             "documents": context["news_items"],
@@ -36,17 +80,17 @@ def _tasks(state: AgentState, prompt: PromptTemplate, news_cap: int) -> list[dic
         return [{"subject": {"ticker": None, "security_id": None}, "user": user_payload(payload), "pool": pool}]
 
     tasks = []
-    for row in context["market_context"]:
+    for row in _subject_rows(state):
         news = newest(news_for_ticker(context["news_items"], str(row["ticker"])), news_cap)
         payload = {
-            "subject": {"ticker": row["ticker"], "security_id": row["security_id"]},
+            "subject": {"ticker": row["ticker"], "security_id": row.get("security_id")},
             "market_context": row,
             "news_items": news,
             "correction": correction,
         }
         tasks.append(
             {
-                "subject": {"ticker": row["ticker"], "security_id": row["security_id"]},
+                "subject": {"ticker": row["ticker"], "security_id": row.get("security_id")},
                 "user": user_payload(payload),
                 "pool": sorted(item_ids(news)),
             }
@@ -67,6 +111,7 @@ async def _infer(
         temperature=prompt.temperature,
         seed=prompt.seed,
         max_output_tokens=prompt.max_output_tokens,
+        estimated_tokens=len(user) // 3 + len(prompt.system_contract) // 3 + prompt.max_output_tokens,
     )
     response = await ladder.complete(request)
     value: dict[str, Any] | None = None
@@ -99,21 +144,72 @@ async def _tier2_cache(deps: Any, state: AgentState) -> list[dict[str, Any]] | N
     return stale
 
 
+def _split_tickers(entries: list[dict[str, Any]], resolver: EntityResolver) -> tuple[list[dict[str, Any]], list[str]]:
+    """Keeps the issuers the registry knows and sets the invented ones aside."""
+    kept, dropped = [], []
+    for entry in entries:
+        ticker = str(entry.get("ticker") or "")
+        if resolver.is_known(ticker):
+            kept.append(entry)
+        else:
+            dropped.append(ticker)
+    return kept, dropped
+
+
+def _fan_out(result: dict[str, Any], task: dict[str, Any], resolver: EntityResolver) -> list[dict[str, Any]]:
+    """Splits one batched response into a draft per article, so one bad verdict cannot sink the rest."""
+    batch = result["value"] or {}
+    base = {
+        "artifact_type": "ARTICLE_SENTIMENT",
+        "provider": result["provider"],
+        "model": result["model"],
+        "batch_id": task["batch_id"],
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+    verdicts = batch.get("verdicts") or []
+    if not verdicts:
+        return [{**base, "subject": task["subject"], "value": None, "invalid": True,
+                 "evidence_pool": task["pool"], "prompt_tokens": result["prompt_tokens"],
+                 "completion_tokens": result["completion_tokens"]}]
+
+    drafts = []
+    for index, verdict in enumerate(verdicts):
+        kept, dropped = _split_tickers(verdict.get("ticker_sentiments") or [], resolver)
+        drafts.append(
+            {
+                **base,
+                "subject": {"ticker": None, "security_id": None},
+                "value": {**verdict, "ticker_sentiments": kept, "dropped_tickers": dropped},
+                "invalid": False,
+                "evidence_pool": [str(verdict.get("item_id"))],
+                "batch_pool": task["pool"],
+                "prompt_tokens": result["prompt_tokens"] if index == 0 else 0,
+                "completion_tokens": result["completion_tokens"] if index == 0 else 0,
+            }
+        )
+    return drafts
+
+
 async def run_analysis(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     deps = get_deps(config)
     objective = state["objective"]
     prompt = get_prompt(objective)
     spec = spec_for(objective)
-    schema = spec.value_model
     ladder = deps.ladder_for(objective)
+    batched = objective == "article_sentiment"
+    resolver = await EntityResolver.from_registry(deps.pg_pool, GoldReader(deps.duckdb_ro)) if batched else None
 
     drafts: list[dict[str, Any]] = []
     tokens = 0
     async with deps.tracer.span(objective, state["run_id"]) as span:
         try:
-            for task in _tasks(state, prompt, deps.settings.max_news_per_subject):
-                result = await _infer(ladder, prompt, schema, task["user"])
+            for index, task in enumerate(_tasks(state, deps.settings)):
+                task["batch_id"] = f"{state['run_id']}:{index}"
+                result = await _infer(ladder, prompt, spec.response_model, task["user"])
                 tokens += result["prompt_tokens"] + result["completion_tokens"]
+                if resolver is not None:
+                    drafts.extend(_fan_out(result, task, resolver))
+                    continue
                 drafts.append(
                     {
                         "subject": task["subject"],

@@ -84,6 +84,37 @@ def sentiment_response(
     return ProviderResponse(provider, "fake-model", "{}", parsed, tokens - 20, 20, 5, 200)
 
 
+def article_verdict(
+    item_id: str,
+    *,
+    label: str = "BULLISH",
+    score: float = 0.3,
+    tickers: list[dict[str, Any]] | None = None,
+    drivers: list[str] | None = None,
+    rationale: str | None = "Quarterly profit rose on wider margins.",
+    confidence: float = 0.8,
+) -> dict[str, Any]:
+    """One article's verdict, as the model would return it inside a batch."""
+    return {
+        "item_id": item_id,
+        "sentiment_score": score,
+        "sentiment_label": label,
+        "rationale": rationale,
+        "drivers": drivers if drivers is not None else ["laba naik"],
+        "ticker_sentiments": tickers
+        if tickers is not None
+        else [{"ticker": "BBCA", "sentiment_score": score, "sentiment_label": label, "relevance": "PRIMARY"}],
+        "self_confidence": confidence,
+    }
+
+
+def article_batch_response(
+    verdicts: list[dict[str, Any]], *, provider: str = "gemini", tokens: int = 400
+) -> ProviderResponse:
+    """A batched article-sentiment response carrying one verdict per article."""
+    return ProviderResponse(provider, "fake-model", "{}", {"verdicts": verdicts}, tokens - 80, 80, 5, 200)
+
+
 def make_slot(provider: ScriptedProvider) -> ProviderSlot:
     """Wraps a scripted provider with a real breaker and a fast pacer."""
     return ProviderSlot(provider, CircuitBreaker(BreakerConfig(5, 60, 120)), RatePacer(100000))

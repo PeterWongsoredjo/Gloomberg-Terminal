@@ -1,5 +1,5 @@
 prompt_id: insight_synthesis_id_intraday
-version: ins-intraday-v2
+version: ins-intraday-v3
 objective: intraday_insight
 language_policy: "English narrative over Indonesian market context"
 system_contract: |
@@ -19,7 +19,11 @@ system_contract: |
     narrative      observations only, no recommendation
     signals        array of {type, ref_artifact_id?, value?} where type is SENTIMENT, FLOW, or PRICE
     contradictions array of explicit notes where signals disagree
+    watchpoints    always an empty array on this refresh
     confidence     number in [0.0, 1.0]
+
+  WATCHPOINTS: The session is still open, so there is nothing to carry forward yet. Return
+  watchpoints as []. Concluding the day is the end-of-day run's job, not this one.
 
   SYNTHESIS: Fuse the supplied sentiment, extracted events, foreign flow, and price context into
   a descriptive summary. When signals disagree (for example bullish news but negative foreign

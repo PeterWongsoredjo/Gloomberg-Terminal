@@ -8,7 +8,14 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from app.agentic.schemas import ArtifactType, ExtractionValue, InsightValue, SentimentValue
+from app.agentic.schemas import (
+    ArticleSentimentBatch,
+    ArticleSentimentValue,
+    ArtifactType,
+    ExtractionValue,
+    InsightValue,
+    SentimentValue,
+)
 
 
 @dataclass(frozen=True)
@@ -19,14 +26,21 @@ class ObjectiveSpec:
     ladder: tuple[str, ...]
     node_name: str
     gate_attr: str
+    request_model: type[BaseModel] | None = None
+
+    @property
+    def response_model(self) -> type[BaseModel]:
+        """What the provider is asked to return."""
+        return self.request_model or self.value_model
 
 
 OBJECTIVES: dict[str, ObjectiveSpec] = {
     "daily_sentiment": ObjectiveSpec(
         "daily_sentiment", "SENTIMENT", SentimentValue, ("groq", "gemini"), "sentiment_analyze", "sentiment_confidence_gate"
     ),
-    "intraday_sentiment": ObjectiveSpec(
-        "intraday_sentiment", "SENTIMENT", SentimentValue, ("groq", "gemini"), "sentiment_analyze", "sentiment_confidence_gate"
+    "article_sentiment": ObjectiveSpec(
+        "article_sentiment", "ARTICLE_SENTIMENT", ArticleSentimentValue, ("gemini", "groq"),
+        "sentiment_analyze", "sentiment_confidence_gate", request_model=ArticleSentimentBatch,
     ),
     "deep_extraction": ObjectiveSpec(
         "deep_extraction", "EXTRACTION", ExtractionValue, ("gemini", "groq"), "deep_extract", "extraction_confidence_gate"

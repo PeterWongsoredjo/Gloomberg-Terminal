@@ -43,7 +43,7 @@ class ProviderLadder:
             if self._quota is not None and self._quota.exhausted(name):
                 continue
             attempted = True
-            await slot.pacer.acquire()
+            await slot.pacer.acquire(request.estimated_tokens)
             try:
                 response = await slot.provider.complete(request)
             except (ProviderRateLimited, ProviderUnavailable):

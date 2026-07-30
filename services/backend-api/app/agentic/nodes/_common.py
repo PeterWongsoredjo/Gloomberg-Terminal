@@ -60,7 +60,7 @@ def user_payload(payload: dict[str, Any]) -> str:
 def value_confidence(objective: str, value: dict[str, Any]) -> float:
     """The artifact-level confidence for an objective's value block."""
     kind = spec_for(objective).artifact_type
-    if kind == "SENTIMENT":
+    if kind in ("SENTIMENT", "ARTICLE_SENTIMENT"):
         return float(value.get("self_confidence", 0.0))
     if kind == "INSIGHT":
         return float(value.get("confidence", 0.0))

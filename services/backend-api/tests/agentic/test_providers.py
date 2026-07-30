@@ -13,12 +13,12 @@ from app.agentic.providers.base import (
     ProviderUnavailable,
 )
 from app.agentic.providers.breaker import CircuitBreaker
-from app.agentic.providers.gemini import GeminiProvider
+from app.agentic.providers.gemini import GeminiProvider, _supported_schema
 from app.agentic.providers.groq import GroqProvider
 from app.agentic.providers.ladder import AllProvidersDown, ProviderLadder
 from app.agentic.providers.limits import BreakerConfig
 from app.agentic.providers.pacer import RatePacer
-from app.agentic.schemas import SentimentValue
+from app.agentic.schemas import ArticleSentimentBatch, SentimentValue
 
 from .conftest import ScriptedProvider, make_slot, sentiment_response
 
@@ -74,6 +74,53 @@ async def test_pacer_blocks_when_bucket_empty() -> None:
         await pacer.acquire()
     await pacer.acquire()
     assert slept and slept[0] > 0
+
+
+def _fake_clock() -> tuple[dict[str, float], list[float], Any]:
+    clock = {"t": 0.0}
+    slept: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        clock["t"] += seconds
+
+    return clock, slept, fake_sleep
+
+
+async def test_pacer_without_a_token_ceiling_is_unchanged() -> None:
+    """Omitting tpm has to behave exactly as the rpm-only pacer always did."""
+    clock, slept, fake_sleep = _fake_clock()
+    pacer = RatePacer(60, clock=lambda: clock["t"], sleep=fake_sleep)
+    for _ in range(60):
+        await pacer.acquire(999_999)
+    assert not slept
+    await pacer.acquire(999_999)
+    assert slept and slept[0] > 0
+
+
+async def test_pacer_throttles_on_tokens_before_requests() -> None:
+    """Groq allows 30 requests a minute but only 6000 tokens, so batches hit tpm first."""
+    clock, slept, fake_sleep = _fake_clock()
+    pacer = RatePacer(30, 6000, clock=lambda: clock["t"], sleep=fake_sleep)
+    for _ in range(4):
+        await pacer.acquire(3800)
+    assert sum(slept) > 60.0
+
+
+async def test_a_roomy_token_ceiling_leaves_requests_binding() -> None:
+    """Gemini's 250k tpm means rpm stays the only limit, even for batches."""
+    clock, slept, fake_sleep = _fake_clock()
+    pacer = RatePacer(15, 250_000, clock=lambda: clock["t"], sleep=fake_sleep)
+    for _ in range(15):
+        await pacer.acquire(3800)
+    assert not slept
+
+
+async def test_a_request_larger_than_the_bucket_still_completes() -> None:
+    """An oversized request must be capped, not deadlock the run forever."""
+    clock, slept, fake_sleep = _fake_clock()
+    pacer = RatePacer(30, 6000, clock=lambda: clock["t"], sleep=fake_sleep)
+    await pacer.acquire(50_000)
 
 
 async def test_ladder_substitutes_past_rate_limit() -> None:
@@ -136,6 +183,27 @@ async def test_gemini_adapter_passes_response_schema() -> None:
     client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
     provider = GeminiProvider(client, "gemini-3.1-flash-lite")  # type: ignore[arg-type]
     response = await provider.complete(_request())
-    assert captured["config"].response_json_schema == SentimentValue.model_json_schema()
+    sent = captured["config"].response_json_schema
+    assert sent["properties"]["sentiment_label"] == SentimentValue.model_json_schema()["properties"]["sentiment_label"]
     assert captured["config"].response_mime_type == "application/json"
     assert response.parsed is not None and response.parsed["sentiment_label"] == "BEARISH"
+
+
+def test_gemini_schema_drops_the_keywords_the_api_rejects() -> None:
+    """Gemini 400s on maxItems, and SentimentValue.drivers carries one."""
+    raw = ArticleSentimentBatch.model_json_schema()
+    assert _has_key(raw, "maxItems")
+
+    sanitized = _supported_schema(raw)
+
+    assert not _has_key(sanitized, "maxItems")
+    assert _has_key(sanitized, "pattern")
+    assert not _has_key(_supported_schema(SentimentValue.model_json_schema()), "maxItems")
+
+
+def _has_key(node: Any, key: str) -> bool:
+    if isinstance(node, dict):
+        return key in node or any(_has_key(v, key) for v in node.values())
+    if isinstance(node, list):
+        return any(_has_key(v, key) for v in node)
+    return False

@@ -43,10 +43,18 @@ def build_slots(settings: AgenticSettings, clients: dict[str, object]) -> dict[s
     slots: dict[str, ProviderSlot] = {}
     if "groq" in clients:
         groq_provider = GroqProvider(clients["groq"], settings.groq_model)  # type: ignore[arg-type]
-        slots["groq"] = ProviderSlot(groq_provider, CircuitBreaker(breaker_config), RatePacer(GROQ_LIMITS.rpm))
+        slots["groq"] = ProviderSlot(
+            groq_provider,
+            CircuitBreaker(breaker_config),
+            RatePacer(GROQ_LIMITS.rpm, GROQ_LIMITS.tpm),
+        )
     if "gemini" in clients:
         gemini_provider = GeminiProvider(clients["gemini"], settings.gemini_model)  # type: ignore[arg-type]
-        slots["gemini"] = ProviderSlot(gemini_provider, CircuitBreaker(breaker_config), RatePacer(GEMINI_LIMITS.rpm))
+        slots["gemini"] = ProviderSlot(
+            gemini_provider,
+            CircuitBreaker(breaker_config),
+            RatePacer(GEMINI_LIMITS.rpm, GEMINI_LIMITS.tpm),
+        )
     return slots
 
 

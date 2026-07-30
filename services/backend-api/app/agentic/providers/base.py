@@ -40,6 +40,7 @@ class ProviderRequest:
     seed: int = 42
     max_output_tokens: int = 512
     idempotency_key: str = ""
+    estimated_tokens: int = 0
 
 
 @dataclass

@@ -8,12 +8,13 @@ Finalize is the main coordinator node for the cleanup phase. It:
 from __future__ import annotations
 
 import logging
+from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import asyncpg
 from langchain_core.runnables import RunnableConfig
 
-from app.agentic import cache, intraday, ledger
+from app.agentic import cache, intraday, ledger, rollup
 from app.agentic.config import AgenticSettings
 from app.agentic.confidence import apply_gate
 from app.agentic.deps import GraphDeps
@@ -21,6 +22,7 @@ from app.agentic.ids import new_ulid
 from app.agentic.nodes._common import get_deps, value_confidence
 from app.agentic.objectives import spec_for_type
 from app.agentic.schemas import (
+    ArticleSentimentValue,
     Ct009Artifact,
     ExtractionValue,
     InsightValue,
@@ -35,14 +37,35 @@ from app.agentic.state import AgentState
 logger = logging.getLogger(__name__)
 
 
-async def _project_intraday(deps: GraphDeps, state: AgentState, artifacts: list[dict[str, Any]]) -> None:
-    """Lands intraday projections, the next scheduled run retries on failure."""
-    if state["objective"] not in intraday.INTRADAY_OBJECTIVES or deps.pg_pool is None:
+async def _roll_up_tickers(pool: asyncpg.Pool, state: AgentState) -> None:
+    """Derives per-ticker sentiment from the day's scored articles, spending no tokens."""
+    trade_date = date.fromisoformat(state["trade_date"])
+    rows = await intraday.rollup_source(pool, state["trade_date"])
+    rolled = rollup.roll_up(rows, rollup.day_end(trade_date))
+    if not rolled:
+        return
+    tuples = rollup.upsert_tuples(
+        rolled,
+        trade_date,
+        state["run_id"],
+        state.get("trace_id"),
+        datetime.now(UTC),
+    )
+    await intraday.project(pool, state, tuples)
+
+
+async def _project_intraday(
+    deps: GraphDeps, state: AgentState, artifacts: list[dict[str, Any]], batch_ids: dict[str, str]
+) -> None:
+    """Lands the serving projections, the next scheduled run retries on failure."""
+    objective = state["objective"]
+    if deps.pg_pool is None:
         return
     try:
-        if state["objective"] == "intraday_sentiment":
-            await intraday.project(deps.pg_pool, state, artifacts)
-        else:
+        if objective == "article_sentiment":
+            await intraday.project_article_sentiment(deps.pg_pool, state, artifacts, batch_ids)
+            await _roll_up_tickers(deps.pg_pool, state)
+        elif objective in intraday.INSIGHT_PROJECTED:
             await intraday.project_insight(deps.pg_pool, state, artifacts)
     except asyncpg.PostgresError:
         logger.warning("intraday projection write failed for run %s", state["run_id"], exc_info=True)
@@ -51,7 +74,7 @@ async def _project_intraday(deps: GraphDeps, state: AgentState, artifacts: list[
 def _build_artifact(draft: dict[str, Any], state: AgentState, settings: AgenticSettings) -> Ct009Artifact:
     spec = spec_for_type(draft["artifact_type"])
     value = cast(
-        SentimentValue | ExtractionValue | InsightValue,
+        SentimentValue | ArticleSentimentValue | ExtractionValue | InsightValue,
         spec.value_model.model_validate(draft["value"]),
     )
     confidence = value_confidence(spec.objective, draft["value"])
@@ -111,11 +134,17 @@ async def finalize(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     async with deps.tracer.span("finalize", state["run_id"]) as span:
         new_dicts = [_build_artifact(d, state, settings).model_dump(by_alias=True, mode="json") for d in accepted]
         total = len(state.get("artifacts", [])) + len(new_dicts)
-        status = "DEGRADED" if state.get("abort_reason") or total == 0 else "SUCCEEDED"
+        idle = bool(state["working"].get("nothing_to_do"))
+        status = "DEGRADED" if state.get("abort_reason") or (total == 0 and not idle) else "SUCCEEDED"
         span.set_output({"artifacts": total, "status": status})
 
+        batch_ids = {
+            str((d.get("value") or {}).get("item_id")): str(d["batch_id"])
+            for d in accepted
+            if d.get("batch_id") and (d.get("value") or {}).get("item_id")
+        }
         await _persist(deps, state, new_dicts)
-        await _project_intraday(deps, state, [*state.get("artifacts", []), *new_dicts])
+        await _project_intraday(deps, state, [*state.get("artifacts", []), *new_dicts], batch_ids)
         await _record_health(deps)
         if deps.pg_pool is not None:
             await ledger.finish_run(

@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 from app.agentic import ledger
 from app.agentic.deps import GraphDeps
 from app.agentic.ids import new_ulid
 from app.agentic.objectives import spec_for
-from app.agentic.state import AgentState
+from app.agentic.state import AgentState, Objective
 from app.observability.langfuse_tracer import LangfuseTracer
 
 _RECURSION_LIMIT = 60  # analyze/evaluate/optimize loop hard cap
@@ -26,7 +26,7 @@ def _initial_state(
 ) -> AgentState:
     return {
         "run_id": run_id,
-        "objective": objective,  # type: ignore[typeddict-item]
+        "objective": cast(Objective, objective),
         "subject_universe": universe,
         "trade_date": trade_date,
         "budget": {

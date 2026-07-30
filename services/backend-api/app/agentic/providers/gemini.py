@@ -5,6 +5,7 @@ Gemini adapter (2.5 Flash-Lite)
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from google import genai
 from google.genai import errors, types
@@ -17,6 +18,18 @@ from app.agentic.providers.base import (
     ProviderUnavailable,
     parse_json_object,
 )
+
+
+_UNSUPPORTED_SCHEMA_KEYS = frozenset({"maxItems", "minItems"})
+
+
+def _supported_schema(node: Any) -> Any:
+    """Drops keywords Gemini rejects; pydantic still enforces them on the way back."""
+    if isinstance(node, dict):
+        return {k: _supported_schema(v) for k, v in node.items() if k not in _UNSUPPORTED_SCHEMA_KEYS}
+    if isinstance(node, list):
+        return [_supported_schema(v) for v in node]
+    return node
 
 
 class GeminiProvider:
@@ -32,7 +45,7 @@ class GeminiProvider:
         config = types.GenerateContentConfig(
             system_instruction=request.system,
             response_mime_type="application/json",
-            response_json_schema=request.response_model.model_json_schema(),
+            response_json_schema=_supported_schema(request.response_model.model_json_schema()),
             temperature=request.temperature,
             seed=request.seed,
             max_output_tokens=request.max_output_tokens,

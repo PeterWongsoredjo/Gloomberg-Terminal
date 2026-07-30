@@ -55,6 +55,11 @@ class AgenticSettings(BaseSettings):
     # newest news items sent per subject, bounds prompt size on busy days
     max_news_per_subject: int = 12
 
+    article_batch_size: int = 10
+    article_items_per_poll: int = 40
+    article_backfill_batches_per_run: int = 15
+    insight_subject_cap: int = 8
+
     # cache
     cache_ttl_hours: int = 20
     cache_staleness_budget_hours: int = 48

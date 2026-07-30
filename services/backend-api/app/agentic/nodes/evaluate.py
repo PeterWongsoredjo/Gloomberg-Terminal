@@ -31,6 +31,8 @@ def _grounded(objective: str, draft: dict[str, Any]) -> bool:
     """Whether the draft cites only supplied evidence for its objective."""
     value = draft["value"]
     kind = spec_for(objective).artifact_type
+    if kind == "ARTICLE_SENTIMENT":
+        return str(value.get("item_id")) in set(draft.get("batch_pool") or draft["evidence_pool"])
     if kind == "SENTIMENT":
         return set(value.get("evidence_item_ids", [])).issubset(set(draft["evidence_pool"]))
     if kind == "EXTRACTION":
@@ -38,26 +40,55 @@ def _grounded(objective: str, draft: dict[str, Any]) -> bool:
     return True
 
 
+def _primary_ticker(value: dict[str, Any]) -> str | None:
+    """The issuer an article is mainly about, when it has one."""
+    entries = value.get("ticker_sentiments") or []
+    primary = [e for e in entries if e.get("relevance") == "PRIMARY"]
+    chosen = primary or entries
+    return str(chosen[0]["ticker"]) if chosen else None
+
+
+def _entities_resolved(objective: str, value: dict[str, Any]) -> bool:
+    """A directional read has to be about somebody; a neutral macro note need not be."""
+    if spec_for(objective).artifact_type != "ARTICLE_SENTIMENT":
+        return True
+    if value.get("ticker_sentiments"):
+        return True
+    return value.get("sentiment_label") == "NEUTRAL"
+
+
 def _advisory_text(objective: str, value: dict[str, Any]) -> str:
-    """The textual fields the non-advisory gate scans for an objective."""
+    """Every free-text field the non-advisory gate scans for an objective."""
     kind = spec_for(objective).artifact_type
-    if kind == "SENTIMENT":
-        return " ".join(value.get("drivers", []))
+    if kind in ("SENTIMENT", "ARTICLE_SENTIMENT"):
+        return _joined([*value.get("drivers", []), value.get("rationale")])
     if kind == "INSIGHT":
-        signals = " ".join(str(s.get("value", "")) for s in value.get("signals", []))
-        return f"{value.get('headline', '')} {value.get('narrative', '')} {signals}"
-    return " ".join((e.get("source_span") or "") for e in value.get("events", []))
+        return _joined(
+            [
+                value.get("headline"),
+                value.get("narrative"),
+                *(s.get("value") for s in value.get("signals", [])),
+                *value.get("watchpoints", []),
+            ]
+        )
+    return _joined([e.get("source_span") for e in value.get("events", [])])
+
+
+def _joined(parts: list[Any]) -> str:
+    """One scannable string, skipping the fields this artifact did not fill in."""
+    return " ".join(str(p) for p in parts if p)
 
 
 def _context_consistent(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> bool:
     """A bearish read on a corporate-action move is a context contradiction."""
-    if spec_for(objective).artifact_type != "SENTIMENT":
+    kind = spec_for(objective).artifact_type
+    if kind not in ("SENTIMENT", "ARTICLE_SENTIMENT"):
         return True
     value = draft["value"]
-    ticker = str(draft["subject"].get("ticker"))
+    ticker = _primary_ticker(value) if kind == "ARTICLE_SENTIMENT" else str(draft["subject"].get("ticker"))
     if ticker not in corp_tickers or value.get("sentiment_label") != "BEARISH":
         return True
-    return not _PRICE_DROP.search(" ".join(value.get("drivers", [])))
+    return not _PRICE_DROP.search(" ".join([*value.get("drivers", []), value.get("rationale") or ""]))
 
 
 def _checks(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> dict[str, Any]:
@@ -75,7 +106,7 @@ def _checks(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> di
     return {
         "schema_valid": True,
         "grounded": _grounded(objective, draft),
-        "entities_resolved": True,
+        "entities_resolved": _entities_resolved(objective, value),
         "non_advisory": not contains_advice(_advisory_text(objective, value)),
         "context_consistent": _context_consistent(objective, draft, corp_tickers),
         "confidence_calibrated": value_confidence(objective, value),
@@ -87,6 +118,16 @@ _HARD_GATES = ("schema_valid", "grounded", "entities_resolved", "non_advisory", 
 
 def _passed(checks: dict[str, Any]) -> bool:
     return all(bool(checks[g]) for g in _HARD_GATES)
+
+
+def _verdict(objective: str, graded: list[dict[str, Any]], can_retry: bool) -> str:
+    """Whether the run retries, accepts what it has, or gives up."""
+    passed = [d for d in graded if d["passed"]]
+    if len(passed) == len(graded):
+        return "ACCEPT"
+    if spec_for(objective).artifact_type == "ARTICLE_SENTIMENT" and passed:
+        return "ACCEPT"
+    return "OPTIMIZE" if can_retry else "REJECT"
 
 
 async def evaluate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
@@ -106,13 +147,7 @@ async def evaluate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
                 reasons.extend(g for g in _HARD_GATES if not checks[g])
 
     can_retry = iterations_left(state["budget"]) and tokens_left(state["budget"])
-    all_passed = all(d["passed"] for d in graded)
-    if all_passed:
-        verdict = "ACCEPT"
-    elif can_retry:
-        verdict = "OPTIMIZE"
-    else:
-        verdict = "REJECT"
+    verdict = _verdict(objective, graded, can_retry)
     return {
         "working": {
             **state["working"],
