@@ -10,6 +10,8 @@ import pytest
 from pipeline.bronze import news
 from pipeline.bronze.feeds import FEEDS, NEWS_FEEDS
 from pipeline.bronze.news import day_items, parse_rss
+from pipeline.reference.matcher import Registry
+from pipeline.reference.securities import load_baseline
 
 if TYPE_CHECKING:
     from minio import Minio
@@ -35,19 +37,20 @@ _RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def test_parse_rss_extracts_items_and_tickers() -> None:
-    """Two items parse, the ticker candidate is found, IHSG tags the index subject."""
+def test_parse_rss_extracts_items_and_code_candidates() -> None:
+    """Two items parse and carry raw code candidates, but claim no resolved tickers."""
     items = parse_rss(_RSS, "cnbc_market")
     assert len(items) == 2
     first = items[0]
     assert first["source"] == "cnbc_market"
-    assert "BBCA" in first["tickers"]
-    assert "IHSG" in first["tickers"]
+    assert "BBCA" in first["candidate_tickers"]
+    assert "IHSG" in first["candidate_tickers"]
+    assert "tickers" not in first  # resolution is the registry's job, not the parser's
     assert first["published_at"].endswith("+00:00")
 
 
-def test_parse_rss_still_blocks_non_subject_tokens() -> None:
-    """LQ45 and corporate-action jargon never tag, only real subjects do."""
+def test_parse_rss_candidates_are_unfiltered() -> None:
+    """The parser makes no correctness claim, so jargon still shows up as a candidate."""
     rss = b"""<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0"><channel><item>
       <title>LQ45 turun jelang RUPS emiten</title>
@@ -55,8 +58,14 @@ def test_parse_rss_still_blocks_non_subject_tokens() -> None:
       <link>https://example.com/lq45</link>
       <pubDate>Fri, 03 Jul 2026 09:15:00 +0700</pubDate>
     </item></channel></rss>"""
-    items = parse_rss(rss, "cnbc_market")
-    assert items[0]["tickers"] == []
+    assert parse_rss(rss, "cnbc_market")[0]["candidate_tickers"] == ["RUPS"]
+
+
+def test_tag_items_resolves_against_the_registry() -> None:
+    """Tagging is what turns candidates into tickers, dropping the ones IDX never listed."""
+    items = news.tag_items(parse_rss(_RSS, "cnbc_market"), Registry(load_baseline()))
+    assert items[0]["tickers"] == ["BBCA", "IHSG"]
+    assert items[1]["tickers"] == []
 
 
 def test_news_feeds_registry_dropped_cnbc_all() -> None:

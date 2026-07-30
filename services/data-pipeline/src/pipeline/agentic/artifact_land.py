@@ -15,7 +15,12 @@ from pipeline.bronze.ingest import client, land_payloads
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
-_TYPE_TO_DATASET = {"SENTIMENT": "sentiment", "INSIGHT": "insight", "EXTRACTION": "extraction"}
+_TYPE_TO_DATASET = {
+    "SENTIMENT": "sentiment",
+    "ARTICLE_SENTIMENT": "article_sentiment",
+    "INSIGHT": "insight",
+    "EXTRACTION": "extraction",
+}
 
 
 def _read_ledger(settings: Settings, trade_date: date) -> list[dict[str, Any]]:
@@ -64,7 +69,7 @@ def _row_to_artifact(row: tuple[Any, ...]) -> dict[str, Any]:
 def land_artifacts(minio: Minio, trade_date: date, settings: Settings) -> list[dict[str, Any]]:
     """Lands each artifact type's rows for the date into Bronze; returns the manifests."""
     artifacts = _read_ledger(settings, trade_date)
-    by_type: dict[str, list[dict[str, Any]]] = {}
+    by_type: dict[str, list[dict[str, Any]]] = {t: [] for t in _TYPE_TO_DATASET}
     for artifact in artifacts:
         by_type.setdefault(str(artifact["artifact_type"]), []).append(artifact)
 

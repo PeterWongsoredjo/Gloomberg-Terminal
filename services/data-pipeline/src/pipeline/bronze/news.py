@@ -19,9 +19,10 @@ from pipeline.bronze.feeds import FEEDS
 from pipeline.bronze.ingest import client, land_payloads
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import BRONZE_BUCKET, Settings, get_settings
+from pipeline.reference.matcher import Registry
+from pipeline.reference.store import read as read_registry
 
-_TICKER = re.compile(r"\b[A-Z]{4}\b")
-_NOT_TICKER = {"LQ45", "RUPS", "IPGF", "HMETD"}
+_CODE = re.compile(r"\b[A-Z]{4}\b")
 
 _ACTIVE_DATASETS = {spec.dataset for spec in FEEDS.values() if spec.source == "news_rss"}
 
@@ -43,9 +44,13 @@ def _published_at(raw: str) -> str:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
-def _candidate_tickers(*texts: str) -> list[str]:
-    found = {t for text in texts for t in _TICKER.findall(text)} - _NOT_TICKER
-    return sorted(found)
+def _code_candidates(*texts: str) -> list[str]:
+    """Raw 4-letter tokens in the order they appear; the registry decides which are real."""
+    seen: dict[str, None] = {}
+    for text in texts:
+        for code in _CODE.findall(text):
+            seen.setdefault(code, None)
+    return list(seen)
 
 
 def parse_rss(xml: bytes, source_dataset: str) -> list[dict[str, Any]]:
@@ -71,9 +76,18 @@ def parse_rss(xml: bytes, source_dataset: str) -> list[dict[str, Any]]:
                 "summary": summary,
                 "url": link,
                 "published_at": _published_at(_text(node, "pubDate")),
-                "tickers": _candidate_tickers(title, summary),
+                "candidate_tickers": _code_candidates(title, summary),
             }
         )
+    return items
+
+
+def tag_items(items: list[dict[str, Any]], registry: Registry) -> list[dict[str, Any]]:
+    """Resolves each item's real tickers against the registry, names and codes alike."""
+    for item in items:
+        match = registry.match(str(item["title"]), str(item.get("summary") or ""))
+        item["tickers"] = match.tickers
+        item["candidate_tickers"] = match.candidates
     return items
 
 
@@ -107,8 +121,9 @@ def day_items(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
 
 
 def normalize_from_bronze(minio: Minio, trade_date: date, settings: Settings) -> dict[str, Any]:
-    """Reads raw RSS for the date, normalizes and dedups items, lands them to news_rss/items."""
-    items = day_items(minio, trade_date)
+    """Reads raw RSS for the date, tags and dedups items, lands them to news_rss/items."""
+    registry = Registry(read_registry(settings.postgres_dsn))
+    items = tag_items(day_items(minio, trade_date), registry)
     payload = json.dumps(items, ensure_ascii=False).encode("utf-8")
     return land_payloads(
         minio,
