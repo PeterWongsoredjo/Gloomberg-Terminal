@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMarketState, useTapeSnapshot } from "@/lib/api/hooks";
 import { useTapeStream } from "@/lib/stream/tape-stream";
 
+import { ArticleInference } from "./article-inference";
 import { InsightPanel } from "./insight-panel";
 import { LiveTape } from "./live-tape";
 import { NewsFeed } from "./news-feed";
@@ -18,6 +19,8 @@ const DEFAULT_TICKER = "BBCA";
 
 export function Terminal() {
   const [selectedTicker, setSelectedTicker] = useState(DEFAULT_TICKER);
+  // the id, not the row, so a pinned article fills in later
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const stream = useTapeStream();
   const tapeRest = useTapeSnapshot();
@@ -49,7 +52,11 @@ export function Terminal() {
         />
 
         <div className="grid min-h-0 flex-1 grid-cols-[25%_75%]">
-          <NewsFeed onSelectTicker={selectTicker} />
+          <NewsFeed
+            onSelectTicker={selectTicker}
+            onSelectArticle={(item) => setSelectedItemId(item.item_id)}
+            selectedItemId={selectedItemId}
+          />
 
           <div className="grid min-h-0 grid-rows-[1.6fr_1fr]">
             <div className="grid min-h-0 grid-cols-[30%_70%] border-b border-zinc-800">
@@ -64,7 +71,10 @@ export function Terminal() {
               <TickerChart ticker={selectedTicker} row={activeRow} />
             </div>
 
-            <InsightPanel ticker={selectedTicker} />
+            <div className="grid min-h-0 grid-cols-2">
+              <ArticleInference itemId={selectedItemId} />
+              <InsightPanel ticker={selectedTicker} />
+            </div>
           </div>
         </div>
 

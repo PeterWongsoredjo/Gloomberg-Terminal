@@ -3,9 +3,9 @@
 import { useCallback, useRef, useState } from "react";
 import { Newspaper } from "lucide-react";
 
-import { useNewsFeed } from "@/lib/api/hooks";
+import { feedRows, useNewsFeed } from "@/lib/api/hooks";
 import { fmtWibTime } from "@/lib/format";
-import { DOWN_CLASS, FLAT_CLASS, LINK_CLASS, UP_CLASS, WARN_CLASS } from "@/lib/palette";
+import { LINK_CLASS, UNSCORED_CLASS, WARN_CLASS, labelClass, sentimentGlyph } from "@/lib/palette";
 import type { NewsItem } from "@/lib/types/api";
 
 import { PanelStatus } from "./panel-status";
@@ -15,20 +15,31 @@ import { ProvenanceModal } from "./provenance-modal";
 
 interface NewsFeedProps {
   onSelectTicker: (ticker: string) => void;
+  onSelectArticle: (item: NewsItem) => void;
+  selectedItemId: string | null;
 }
 
-function sentimentClass(score: number | null, stale: boolean): string {
-  if (stale) return WARN_CLASS;
-  if (score === null) return "text-zinc-400";
-  return score >= 0 ? UP_CLASS : DOWN_CLASS;
+function articleClass(label: string | null, stale: boolean): string {
+  return stale ? WARN_CLASS : labelClass(label);
 }
 
-function sentimentGlyph(score: number | null): string {
-  if (score === null) return "·";
-  return score >= 0 ? `▲ +${score.toFixed(2)}` : `▼ ${score.toFixed(2)}`;
+function primaryTicker(item: NewsItem): string | null {
+  const scored = item.ticker_sentiments;
+  const lead = scored.find((t) => t.relevance === "PRIMARY") ?? scored[0];
+  return lead?.ticker ?? item.tickers[0] ?? null;
 }
 
-export function NewsFeed({ onSelectTicker }: NewsFeedProps) {
+function counts(items: NewsItem[]) {
+  const tally = { pos: 0, neu: 0, neg: 0 };
+  for (const n of items) {
+    if (n.sentiment_label === "BULLISH") tally.pos += 1;
+    else if (n.sentiment_label === "BEARISH") tally.neg += 1;
+    else if (n.sentiment_label === "NEUTRAL") tally.neu += 1;
+  }
+  return tally;
+}
+
+export function NewsFeed({ onSelectTicker, onSelectArticle, selectedItemId }: NewsFeedProps) {
   const feed = useNewsFeed();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [auditItem, setAuditItem] = useState<NewsItem | null>(null);
@@ -42,11 +53,10 @@ export function NewsFeed({ onSelectTicker }: NewsFeedProps) {
   }, [feed]);
 
   const pages = feed.data?.pages ?? [];
-  const items: NewsItem[] = pages.flatMap((page) => page.data.rows);
+  const items = feedRows(feed.data?.pages);
   const stale = pages.length > 0 && !pages[0].fresh;
-  const scored = items.filter((n) => n.sentiment_score !== null);
-  const positive = scored.filter((n) => (n.sentiment_score ?? 0) >= 0).length;
-  const negative = scored.length - positive;
+  const tally = counts(items);
+  const unscored = items.length - tally.pos - tally.neu - tally.neg;
 
   return (
     <section className="flex min-h-0 flex-col border-r border-zinc-800">
@@ -65,45 +75,58 @@ export function NewsFeed({ onSelectTicker }: NewsFeedProps) {
           <PanelStatus state="EMPTY" message="No headlines ingested for this window." />
         )}
         {items.map((n) => {
-          const color = sentimentClass(n.sentiment_score, stale);
-          const clickable = n.tickers.length > 0;
+          const color = articleClass(n.sentiment_label, stale);
           const auditable = n.sentiment_provenance !== null;
-          const select = () => clickable && onSelectTicker(n.tickers[0]);
+          const primary = primaryTicker(n);
+          const pinned = n.item_id === selectedItemId;
           return (
             <div
               key={n.item_id}
-              className={`border-b border-zinc-900 px-2 py-1.5 ${clickable ? "hover:bg-zinc-900/40" : ""}`}
+              className={`border-b border-zinc-900 px-2 py-1.5 hover:bg-zinc-900/40 ${
+                pinned ? "border-l-2 border-l-[#00FF66] bg-zinc-900/60" : ""
+              }`}
             >
               <div className="flex items-center justify-between text-[10px]">
-                <button
-                  onClick={select}
-                  disabled={!clickable}
-                  className={`flex-1 truncate text-left ${clickable ? "" : "cursor-default"}`}
-                >
-                  <span className={LINK_CLASS}>{`[${n.source}]`}</span>{" "}
+                <div className="flex min-w-0 flex-1 items-center gap-1 truncate">
+                  <span className={LINK_CLASS}>{`[${n.source}]`}</span>
                   <span className="text-zinc-500">{fmtWibTime(n.published_at)}</span>
-                  {n.tickers.length > 0 && (
-                    <span className="ml-1 text-zinc-600">{n.tickers.join(" ")}</span>
-                  )}
-                </button>
+                  {/* one chip per issuer, each tinted by its own read and clickable on its own */}
+                  {n.ticker_sentiments.map((t) => (
+                    <button
+                      key={t.ticker}
+                      onClick={() => onSelectTicker(t.ticker)}
+                      title={
+                        t.sentiment_label
+                          ? `${t.ticker} ${t.sentiment_label} ${t.sentiment_score?.toFixed(2) ?? ""} (${t.relevance})`
+                          : `${t.ticker} not scored yet`
+                      }
+                      className={`shrink-0 hover:brightness-125 ${labelClass(t.sentiment_label)}`}
+                    >
+                      {t.ticker}
+                    </button>
+                  ))}
+                </div>
                 {auditable ? (
                   <button
                     onClick={() => setAuditItem(n)}
-                    aria-label={`Audit AI sentiment provenance for ${n.tickers[0] ?? "item"}`}
-                    className={`tabular-nums ${color} underline decoration-dotted underline-offset-2 hover:brightness-125`}
+                    aria-label={`Audit AI sentiment provenance for ${n.title}`}
+                    className={`shrink-0 tabular-nums ${color} underline decoration-dotted underline-offset-2 hover:brightness-125`}
                   >
-                    {sentimentGlyph(n.sentiment_score)}
+                    {sentimentGlyph(n.sentiment_label, n.sentiment_score)}
                   </button>
                 ) : (
-                  <span className={`tabular-nums ${n.sentiment_score === null ? FLAT_CLASS : color}`}>
-                    {sentimentGlyph(n.sentiment_score)}
+                  <span className={`shrink-0 tabular-nums ${UNSCORED_CLASS}`}>
+                    {sentimentGlyph(n.sentiment_label, n.sentiment_score)}
                   </span>
                 )}
               </div>
+              {/* one click pins the article and picks its lead issuer */}
               <button
-                onClick={select}
-                disabled={!clickable}
-                className={`block w-full text-left ${clickable ? "" : "cursor-default"}`}
+                onClick={() => {
+                  onSelectArticle(n);
+                  if (primary) onSelectTicker(primary);
+                }}
+                className="block w-full text-left"
               >
                 <p className={`mt-0.5 leading-snug ${color}`}>{n.title}</p>
               </button>
@@ -116,16 +139,17 @@ export function NewsFeed({ onSelectTicker }: NewsFeedProps) {
       </div>
 
       <div className="border-t border-zinc-800 bg-[#121212] px-2 py-1 text-zinc-500">
-        INGESTED {items.length} · POS {positive} · NEG {negative}
+        INGESTED {items.length} · POS {tally.pos} · NEU {tally.neu} · NEG {tally.neg} · UNSCORED{" "}
+        {unscored}
         {pages[0] && <span className="ml-2 text-zinc-600">AS OF {fmtWibTime(pages[0].asOf)}</span>}
       </div>
 
       {auditItem?.sentiment_provenance && (
         <ProvenanceModal
-          title={`AUDIT PROVENANCE // NEWS SENTIMENT · ${auditItem.tickers[0] ?? ""}`}
+          title={`AUDIT PROVENANCE // ARTICLE SENTIMENT`}
           provenance={auditItem.sentiment_provenance}
-          ticker={auditItem.tickers[0] ?? ""}
-          evidenceItemIds={auditItem.sentiment_provenance.evidence_item_ids}
+          ticker={auditItem.ticker_sentiments[0]?.ticker ?? ""}
+          evidenceItemIds={[auditItem.item_id]}
           onClose={() => setAuditItem(null)}
         />
       )}

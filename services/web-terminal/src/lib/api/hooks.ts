@@ -9,6 +9,7 @@ import type {
   LiveTapePage,
   MarketState,
   NewsFeedPage,
+  NewsItem,
   RunReasoningTrace,
 } from "@/lib/types/api";
 import type { SessionPhase, ViewEnvelope } from "@/lib/types/envelope";
@@ -52,6 +53,11 @@ export function useNewsFeed() {
     getNextPageParam: (last) => last.data.next_cursor ?? undefined,
     refetchInterval: 60_000,
   });
+}
+
+/** Every headline loaded so far, newest first, across the paged feed. */
+export function feedRows(pages: ViewEnvelope<NewsFeedPage>[] | undefined): NewsItem[] {
+  return (pages ?? []).flatMap((page) => page.data.rows);
 }
 
 /** The insight for one ticker, a 404 is an honest empty, not an error. */

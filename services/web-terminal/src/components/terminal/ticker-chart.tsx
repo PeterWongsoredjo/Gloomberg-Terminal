@@ -2,6 +2,7 @@
 
 import { fmtIdrScale, fmtInt, fmtPct, fmtShares } from "@/lib/format";
 import { signClass } from "@/lib/palette";
+import { tradingViewSymbol } from "@/lib/symbols";
 import type { LiveTapeRow } from "@/lib/types/api";
 
 /* Column B, the TradingView embed plus our own Gold stat strip. */
@@ -13,7 +14,7 @@ interface TickerChartProps {
 
 function tradingViewSrc(ticker: string): string {
   const params = new URLSearchParams({
-    symbol: `IDX:${ticker}`,
+    symbol: tradingViewSymbol(ticker),
     interval: "D",
     theme: "dark",
     style: "1",
@@ -40,7 +41,7 @@ export function TickerChart({ ticker, row }: TickerChartProps) {
     <section className="flex min-h-0 flex-col bg-[#0a0a0a]">
       <div className="flex items-center justify-between border-b border-zinc-800 bg-[#121212] px-2 py-1">
         <div className="flex items-center gap-3">
-          <span className="text-zinc-200">{`IDX:${ticker}`}</span>
+          <span className="text-zinc-200">{tradingViewSymbol(ticker)}</span>
           <span className="border border-zinc-700 px-1.5 py-0.5 text-[10px] tracking-wide text-zinc-500">
             TRADINGVIEW · DELAYED 15M
           </span>
@@ -57,7 +58,7 @@ export function TickerChart({ ticker, row }: TickerChartProps) {
         <iframe
           key={ticker}
           src={tradingViewSrc(ticker)}
-          title={`TradingView chart for IDX:${ticker}`}
+          title={`TradingView chart for ${tradingViewSymbol(ticker)}`}
           className="h-full w-full border-0"
           allow="fullscreen"
         />

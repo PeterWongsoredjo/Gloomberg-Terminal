@@ -57,6 +57,13 @@ export interface NewsSentimentProvenance {
   evidence_item_ids: string[];
 }
 
+export interface NewsTickerSentiment {
+  ticker: string;
+  sentiment_score: number | null;
+  sentiment_label: string | null;
+  relevance: string | null;
+}
+
 export interface NewsItem {
   item_id: string;
   trade_date: string;
@@ -69,6 +76,9 @@ export interface NewsItem {
   tickers: string[];
   sentiment_score: number | null;
   sentiment_label: string | null;
+  sentiment_rationale: string | null;
+  sentiment_drivers: string[];
+  ticker_sentiments: NewsTickerSentiment[];
   sentiment_provenance: NewsSentimentProvenance | null;
 }
 
@@ -93,12 +103,16 @@ export interface InsightProvenance {
   loop_iterations: number | null;
 }
 
+export type InsightScope = "INTRADAY" | "EOD";
+
 export interface InsightPanelData {
   ticker: string;
   headline: string;
   narrative: string;
   signals: InsightSignal[];
   contradictions: string[];
+  watchpoints: string[];
+  scope: InsightScope;
   provenance: InsightProvenance;
   confidence: number;
   status: InsightStatus;

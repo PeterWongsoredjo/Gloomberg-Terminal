@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { Activity, Check, Copy, X } from "lucide-react";
 
 import { LANGFUSE_HOST } from "@/lib/api/client";
-import { useNewsFeed, useRunTrace } from "@/lib/api/hooks";
+import { feedRows, useNewsFeed, useRunTrace } from "@/lib/api/hooks";
 import { fmtWibDateTime, fmtWibTime } from "@/lib/format";
 import { LINK_CLASS } from "@/lib/palette";
 import type { TraceStep } from "@/lib/types/api";
 
+import { LinkOut } from "./link-out";
 import { PanelStatus } from "./panel-status";
 
 /* The audit modal, evidence headlines left, reasoning ledger right. */
@@ -57,9 +58,9 @@ export function ProvenanceModal({ title, provenance, ticker, evidenceItemIds, on
 
   // evidence is the exact items the model read when given, else the ticker's tagged headlines
   const evidenceIds = evidenceItemIds ? new Set(evidenceItemIds) : null;
-  const evidence = (news.data?.pages ?? [])
-    .flatMap((page) => page.data.rows)
-    .filter((n) => (evidenceIds ? evidenceIds.has(n.item_id) : n.tickers.includes(ticker)));
+  const evidence = feedRows(news.data?.pages).filter((n) =>
+    evidenceIds ? evidenceIds.has(n.item_id) : n.tickers.includes(ticker)
+  );
 
   const steps = trace.data?.data.steps ?? [];
 
@@ -115,14 +116,7 @@ export function ProvenanceModal({ title, provenance, ticker, evidenceItemIds, on
                   </div>
                   <p className="mt-0.5 text-zinc-300">{n.title}</p>
                   {n.summary && <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">{n.summary}</p>}
-                  <a
-                    href={n.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`text-[10px] ${LINK_CLASS} hover:underline`}
-                  >
-                    {n.url}
-                  </a>
+                  <LinkOut href={n.url} />
                 </div>
               ))}
             </div>

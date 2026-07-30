@@ -6,12 +6,13 @@ import { Activity, AlertTriangle, RefreshCw, Zap } from "lucide-react";
 import { useInsight } from "@/lib/api/hooks";
 import { fmtWibDateTime } from "@/lib/format";
 import { UP_CLASS, WARN_CLASS } from "@/lib/palette";
+import { tradingViewSymbol } from "@/lib/symbols";
 import type { InsightPanelData } from "@/lib/types/api";
 
 import { PanelStatus } from "./panel-status";
 import { ProvenanceModal } from "./provenance-modal";
 
-/* Column C, the descriptive GenAI report with full provenance. */
+/* Column C right, the standing conclusion for one ticker. */
 
 interface InsightPanelProps {
   ticker: string;
@@ -22,6 +23,11 @@ const STATUS_CLASS: Record<InsightPanelData["status"], string> = {
   LOW_CONFIDENCE: WARN_CLASS,
   DEGRADED: WARN_CLASS,
   STALE: WARN_CLASS,
+};
+
+const SCOPE_LABEL: Record<InsightPanelData["scope"], string> = {
+  INTRADAY: "HOURLY READ",
+  EOD: "SESSION CLOSE",
 };
 
 export function InsightPanel({ ticker }: InsightPanelProps) {
@@ -47,11 +53,16 @@ export function InsightPanel({ ticker }: InsightPanelProps) {
       <div className="flex items-center justify-between border-b border-zinc-800 bg-[#121212] px-2 py-1 text-[#00FF66]">
         <span className="flex items-center gap-2 tracking-widest">
           <Activity className="h-3 w-3" />
-          [GENAI INTELLIGENCE REPORT]
+          [TICKER CONCLUSION // {ticker}]
           {panel && (
-            <span className={`ml-2 ${STATUS_CLASS[panel.status]}`}>
-              {panel.status} · CONF {panel.confidence.toFixed(2)}
-            </span>
+            <>
+              <span className="ml-2 border border-zinc-700 px-1.5 text-zinc-400">
+                {SCOPE_LABEL[panel.scope]}
+              </span>
+              <span className={STATUS_CLASS[panel.status]}>
+                {panel.status} · CONF {panel.confidence.toFixed(2)}
+              </span>
+            </>
           )}
         </span>
         <div className="flex items-center gap-2">
@@ -81,50 +92,54 @@ export function InsightPanel({ ticker }: InsightPanelProps) {
       {insight.isSuccess && panel === null && (
         <PanelStatus
           state="EMPTY"
-          message={`No insight artifact for ${ticker} yet. The scheduler refreshes insights hourly during session.`}
+          message={`No conclusion for ${ticker}. Conclusions cover the curated universe only, hourly while the session is open and once more at the close, for tickers the day gave news to.`}
         />
       )}
 
       {panel && (
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-0 overflow-auto">
-          <div className="overflow-auto p-2">
-            <p className="mb-1 text-zinc-200">{panel.headline}</p>
-            <p className={`leading-relaxed ${stale ? WARN_CLASS : "text-zinc-400"}`}>
-              {panel.narrative}
-            </p>
-            {panel.signals.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {panel.signals.map((s) => (
-                  <span key={`${s.type}-${s.value}`} className="border border-zinc-700 px-1.5 py-0.5 text-zinc-400">
-                    <span className="text-zinc-600">{s.type}</span> {s.value}
-                    {s.confidence !== null && (
-                      <span className="ml-1 text-zinc-600">({s.confidence.toFixed(2)})</span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="min-h-0 flex-1 overflow-auto p-2">
+          <p className="mb-1 text-zinc-200">{panel.headline}</p>
+          <p className={`leading-relaxed ${stale ? WARN_CLASS : "text-zinc-400"}`}>
+            {panel.narrative}
+          </p>
 
-          <div className="overflow-auto border-l border-zinc-800 p-2">
-            {panel.contradictions.length > 0 ? (
-              <div className="border border-[#FBBF24]/60 bg-[#FBBF24]/10 p-2">
-                <div className="mb-1 flex items-center gap-1.5 text-[#FBBF24]">
-                  <AlertTriangle className="h-3 w-3" />
-                  <span className="tracking-widest">[SIGNAL CONTRADICTIONS ENCOUNTERED]</span>
-                </div>
-                <ul className="flex flex-col gap-1 text-zinc-400">
-                  {panel.contradictions.map((c) => (
-                    <li key={c}>• {c}</li>
-                  ))}
-                </ul>
+          {panel.signals.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {panel.signals.map((s) => (
+                <span key={`${s.type}-${s.value}`} className="border border-zinc-700 px-1.5 py-0.5 text-zinc-400">
+                  <span className="text-zinc-600">{s.type}</span> {s.value}
+                  {s.confidence !== null && (
+                    <span className="ml-1 text-zinc-600">({s.confidence.toFixed(2)})</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {panel.contradictions.length > 0 && (
+            <div className="mt-2 border border-[#FBBF24]/60 bg-[#FBBF24]/10 p-2">
+              <div className="mb-1 flex items-center gap-1.5 text-[#FBBF24]">
+                <AlertTriangle className="h-3 w-3" />
+                <span className="tracking-widest">[SIGNAL CONTRADICTIONS]</span>
               </div>
-            ) : (
-              <div className="border border-zinc-800 p-2 text-zinc-600">
-                No signal contradictions recorded for this artifact.
-              </div>
-            )}
-          </div>
+              <ul className="flex flex-col gap-1 text-zinc-400">
+                {panel.contradictions.map((c) => (
+                  <li key={c}>• {c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {panel.watchpoints.length > 0 && (
+            <div className="mt-2 border-t border-zinc-900 pt-2">
+              <div className="mb-1 tracking-widest text-zinc-600">[CARRIES INTO NEXT SESSION]</div>
+              <ul className="flex flex-col gap-0.5 text-zinc-400">
+                {panel.watchpoints.map((w) => (
+                  <li key={w}>• {w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
@@ -144,7 +159,7 @@ export function InsightPanel({ ticker }: InsightPanelProps) {
 
       {modalOpen && panel && (
         <ProvenanceModal
-          title={`AUDIT PROVENANCE // IDX:${ticker}`}
+          title={`AUDIT PROVENANCE // ${tradingViewSymbol(ticker)}`}
           provenance={panel.provenance}
           ticker={ticker}
           onClose={() => setModalOpen(false)}
