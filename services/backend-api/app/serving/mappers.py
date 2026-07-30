@@ -10,6 +10,7 @@ from app.serving.models import (
     DataTelemetry,
     InsightPanel,
     InsightProvenance,
+    InsightScope,
     InsightSignal,
     InsightStatus,
     MatrixAxes,
@@ -17,6 +18,7 @@ from app.serving.models import (
     MatrixWindow,
     NewsItem,
     NewsSentimentProvenance,
+    NewsTickerSentiment,
     PriceIntegrity,
     PriceLimit,
     SecurityRow,
@@ -142,6 +144,8 @@ def insight_panel(
         narrative=fct["narrative"],
         signals=signals,
         contradictions=list(fct.get("contradictions") or []),
+        watchpoints=list(fct.get("watchpoints") or []),
+        scope=_insight_scope(fct["prompt_version"]),
         provenance=InsightProvenance(
             provider=fct["provider"],
             model=fct["model"],
@@ -155,6 +159,11 @@ def insight_panel(
         status=status,
         quality_flags=flags,
     )
+
+
+# eod prompts conclude the day, the rest read it live
+def _insight_scope(prompt_version: Any) -> InsightScope:
+    return InsightScope.EOD if str(prompt_version).startswith("ins-eod") else InsightScope.INTRADAY
 
 
 def _insight_status(provenance: dict[str, Any] | None, flags: list[QualityFlag]) -> InsightStatus:
@@ -181,14 +190,16 @@ def candle(row: dict[str, Any]) -> Candle:
 
 def news_item(
     row: dict[str, Any],
-    sentiment_by_ticker: dict[str, dict[str, Any]] | None = None,
+    sentiment_by_item: dict[str, dict[str, Any]] | None = None,
+    breakdown_by_item: dict[str, list[dict[str, Any]]] | None = None,
     provenance_by_artifact: dict[str, dict[str, Any]] | None = None,
 ) -> NewsItem:
-    """fct_news_item row plus the first tagged ticker's sentiment and its provenance, when known."""
-    tickers = list(row.get("tickers") or [])
-    sentiment = _first_ticker_sentiment(tickers, sentiment_by_ticker)
+    """A headline plus its own sentiment and the per-issuer breakdown inside it."""
+    item_id = str(row["item_id"])
+    sentiment = (sentiment_by_item or {}).get(item_id, {})
+    breakdown = (breakdown_by_item or {}).get(item_id, [])
     return NewsItem(
-        item_id=row["item_id"],
+        item_id=item_id,
         trade_date=row["trade_date"],
         source=row["source"],
         lang=row.get("lang"),
@@ -196,19 +207,35 @@ def news_item(
         summary=row.get("summary"),
         url=row["url"],
         published_at=row["published_at"],
-        tickers=tickers,
+        tickers=list(row.get("tickers") or []),
         sentiment_score=_as_float(sentiment.get("sentiment_score")),
         sentiment_label=_as_str(sentiment.get("sentiment_label")),
+        sentiment_rationale=_as_str(sentiment.get("rationale")),
+        sentiment_drivers=[str(d) for d in (sentiment.get("drivers") or [])],
+        ticker_sentiments=_ticker_sentiments(row, breakdown),
         sentiment_provenance=_news_sentiment_provenance(sentiment, provenance_by_artifact),
     )
 
 
-def _first_ticker_sentiment(
-    tickers: list[str], sentiment_by_ticker: dict[str, dict[str, Any]] | None
-) -> dict[str, Any]:
-    if not tickers or not sentiment_by_ticker:
-        return {}
-    return sentiment_by_ticker.get(tickers[0], {})
+def _ticker_sentiments(
+    row: dict[str, Any], breakdown: list[dict[str, Any]]
+) -> list[NewsTickerSentiment]:
+    """Every tagged issuer, scored ones first; an unscored ticker still gets a chip."""
+    scored = {
+        str(entry["ticker"]): NewsTickerSentiment(
+            ticker=str(entry["ticker"]),
+            sentiment_score=_as_float(entry.get("sentiment_score")),
+            sentiment_label=_as_str(entry.get("sentiment_label")),
+            relevance=_as_str(entry.get("relevance")),
+        )
+        for entry in breakdown
+    }
+    for ticker in (str(t) for t in row.get("tickers") or []):
+        scored.setdefault(
+            ticker,
+            NewsTickerSentiment(ticker=ticker, sentiment_score=None, sentiment_label=None, relevance=None),
+        )
+    return list(scored.values())
 
 
 def _news_sentiment_provenance(

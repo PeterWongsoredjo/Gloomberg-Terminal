@@ -30,6 +30,13 @@ class InsightStatus(StrEnum):
     STALE = "STALE"
 
 
+class InsightScope(StrEnum):
+    """Whether a read is an in-session refresh or the close-of-day conclusion."""
+
+    INTRADAY = "INTRADAY"
+    EOD = "EOD"
+
+
 # --- market/state ---
 
 
@@ -161,6 +168,8 @@ class InsightPanel(_Model):
     narrative: str
     signals: list[InsightSignal]
     contradictions: list[str]
+    watchpoints: list[str]
+    scope: InsightScope
     provenance: InsightProvenance
     confidence: float
     status: InsightStatus
@@ -229,6 +238,15 @@ class NewsSentimentProvenance(_Model):
     evidence_item_ids: list[str]
 
 
+class NewsTickerSentiment(_Model):
+    """How one article reads for one of the issuers it names."""
+
+    ticker: str
+    sentiment_score: float | None
+    sentiment_label: str | None
+    relevance: str | None
+
+
 class NewsItem(_Model):
     item_id: str
     trade_date: date
@@ -241,6 +259,9 @@ class NewsItem(_Model):
     tickers: list[str]
     sentiment_score: float | None
     sentiment_label: str | None
+    sentiment_rationale: str | None
+    sentiment_drivers: list[str]
+    ticker_sentiments: list[NewsTickerSentiment]
     sentiment_provenance: NewsSentimentProvenance | None
 
 

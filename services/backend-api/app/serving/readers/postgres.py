@@ -81,6 +81,36 @@ class ServingPostgresReader:
         """
         return await self._fetch(sql, before[0], before[1], limit)
 
+    async def article_sentiment(self, item_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Each article's own verdict, keyed by item_id."""
+        if not item_ids:
+            return {}
+        sql = """
+            select item_id, sentiment_score, sentiment_label, confidence, artifact_id,
+                   provider, model, prompt_version, generated_at, rationale, drivers
+            from intraday.article_sentiment
+            where item_id = any($1)
+        """
+        rows = await self._fetch(sql, item_ids)
+        for row in rows:
+            row["drivers"] = _json_list(row.get("drivers"))
+        return {str(r["item_id"]): r for r in rows}
+
+    async def article_ticker_sentiment(self, item_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Each article's per-issuer breakdown, so a multi-ticker headline reads correctly."""
+        if not item_ids:
+            return {}
+        sql = """
+            select item_id, ticker, sentiment_score, sentiment_label, relevance
+            from intraday.article_ticker_sentiment
+            where item_id = any($1)
+            order by item_id, ticker
+        """
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in await self._fetch(sql, item_ids):
+            grouped.setdefault(str(row["item_id"]), []).append(row)
+        return grouped
+
     async def latest_intraday_sentiment(self, tickers: list[str]) -> dict[str, dict[str, Any]]:
         """The newest in-session sentiment row per ticker, shaped like the Gold read."""
         if not tickers:
@@ -100,7 +130,7 @@ class ServingPostgresReader:
         """The newest in-session insight row for one ticker, shaped like the Gold read."""
         sql = """
             select artifact_id, ticker, trade_date, prompt_version, headline, narrative,
-                   contradictions, confidence, provider, model, generated_at,
+                   contradictions, watchpoints, confidence, provider, model, generated_at,
                    quality_flags as dq_flags
             from intraday.insight
             where ticker = $1
@@ -111,6 +141,7 @@ class ServingPostgresReader:
         if row is None:
             return None
         row["contradictions"] = _json_list(row.get("contradictions"))
+        row["watchpoints"] = _json_list(row.get("watchpoints"))
         row["dq_flags"] = _json_list(row.get("dq_flags"))
         return row
 

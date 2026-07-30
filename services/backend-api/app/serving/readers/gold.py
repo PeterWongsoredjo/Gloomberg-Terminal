@@ -5,10 +5,16 @@ Read-only DuckDB Gold access for facts not projected to Postgres.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Any
 
 import duckdb
+
+logger = logging.getLogger("gloomberg.serving.gold")
+
+# a table the build has not published yet, or a column it has not rebuilt yet
+_UNBUILT = (duckdb.CatalogException, duckdb.BinderException)
 
 
 class ServingGoldReader:
@@ -72,6 +78,34 @@ class ServingGoldReader:
         """
         return await self._safe(sql, params)
 
+    async def article_sentiment(self, item_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Each article's own verdict from Gold, for headlines past the intraday window."""
+        if not item_ids:
+            return {}
+        sql = """
+            select item_id, sentiment_score, sentiment_label, confidence, artifact_id,
+                   provider, model, prompt_version, generated_at, rationale, drivers
+            from fct_article_sentiment
+            where list_contains(?::varchar[], item_id)
+        """
+        rows = await self._safe(sql, [item_ids])
+        return {str(r["item_id"]): r for r in rows}
+
+    async def article_ticker_sentiment(self, item_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Each article's per-issuer breakdown from Gold."""
+        if not item_ids:
+            return {}
+        sql = """
+            select item_id, ticker, sentiment_score, sentiment_label, relevance
+            from fct_article_ticker_sentiment
+            where list_contains(?::varchar[], item_id)
+            order by item_id, ticker
+        """
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in await self._safe(sql, [item_ids]):
+            grouped.setdefault(str(row["item_id"]), []).append(row)
+        return grouped
+
     async def latest_sentiment(self, tickers: list[str]) -> dict[str, dict[str, Any]]:
         """The newest sentiment row per ticker, with its provenance, for tagging headlines."""
         if not tickers:
@@ -96,7 +130,7 @@ class ServingGoldReader:
     async def insight(self, ticker: str) -> dict[str, Any] | None:
         sql = """
             select artifact_id, ticker, trade_date, prompt_version, headline, narrative,
-                   contradictions, confidence, provider, model, generated_at, dq_flags
+                   contradictions, watchpoints, confidence, provider, model, generated_at, dq_flags
             from fct_insight
             where ticker = ?
             order by trade_date desc, generated_at desc
@@ -104,8 +138,9 @@ class ServingGoldReader:
         """
         try:
             return await self._row(sql, [ticker])
-        except duckdb.CatalogException:
-            return None  # insight facts not yet published to this snapshot
+        except _UNBUILT as exc:
+            logger.warning("gold insight read degraded to empty: %s", exc)
+            return None  # insight facts not yet built into this snapshot
 
     async def headline_index(self, index_id: str) -> dict[str, Any] | None:
         """The latest level for one index, for the session strip."""
@@ -124,8 +159,9 @@ class ServingGoldReader:
         return None if row is None or row["d"] is None else str(row["d"])
 
     async def _safe(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
-        """A read that tolerates a not-yet-published table, returning empty."""
+        """A read that tolerates a not-yet-built table or column, returning empty."""
         try:
             return await self._rows(sql, params)
-        except duckdb.CatalogException:
+        except _UNBUILT as exc:
+            logger.warning("gold read degraded to empty: %s", exc)
             return []

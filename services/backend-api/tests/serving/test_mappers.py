@@ -8,7 +8,7 @@ from typing import Any
 
 from app.core.enums import QualityFlag
 from app.serving import mappers
-from app.serving.models import InsightStatus, PriceLimit
+from app.serving.models import InsightScope, InsightStatus, PriceLimit
 
 
 def _tape_raw(**over: Any) -> dict[str, Any]:
@@ -79,50 +79,127 @@ def test_insight_status_reflects_degraded_and_low_confidence() -> None:
     assert degraded.provenance.run_id is None
 
 
-def test_news_item_tags_first_ticker_sentiment() -> None:
-    row = {
-        "item_id": "n1", "trade_date": date(2026, 7, 3), "source": "KONTAN", "lang": "id",
-        "title": "t", "summary": None, "url": "https://x", "published_at": datetime.now(UTC),
-        "tickers": ["BBCA", "BMRI"],
+def _insight_fct(prompt_version: str, watchpoints: list[str] | None = None) -> dict[str, object]:
+    return {
+        "ticker": "TLKM", "headline": "h", "narrative": "n", "contradictions": [],
+        "watchpoints": watchpoints if watchpoints is not None else [],
+        "confidence": 0.8, "provider": "groq", "model": "m", "prompt_version": prompt_version,
+        "generated_at": datetime.now(UTC), "dq_flags": [],
     }
-    sentiment = {"BBCA": {"sentiment_score": 0.4, "sentiment_label": "BULLISH"}}
-    item = mappers.news_item(row, sentiment)
+
+
+def test_insight_scope_is_read_off_the_prompt_version() -> None:
+    """Scope is derived, not stored, so the version prefix is the whole contract."""
+    assert mappers.insight_panel(_insight_fct("ins-eod-v1"), None, []).scope is InsightScope.EOD
+    for version in ("ins-intraday-v3", "ins-v1", "rollup-v1", ""):
+        assert mappers.insight_panel(_insight_fct(version), None, []).scope is InsightScope.INTRADAY
+
+
+def test_insight_watchpoints_survive_the_mapper() -> None:
+    carried = ["RUPS scheduled 30 Jul", "Foreign flow negative 4 sessions"]
+    panel = mappers.insight_panel(_insight_fct("ins-eod-v1", carried), None, [])
+    assert panel.watchpoints == carried
+    assert mappers.insight_panel(_insight_fct("ins-eod-v1"), None, []).watchpoints == []
+
+
+def _news_row(item_id: str = "n1", tickers: list[str] | None = None) -> dict[str, object]:
+    return {
+        "item_id": item_id, "trade_date": date(2026, 7, 3), "source": "KONTAN", "lang": "id",
+        "title": "t", "summary": None, "url": "https://x", "published_at": datetime.now(UTC),
+        "tickers": tickers if tickers is not None else ["BBCA", "BMRI"],
+    }
+
+
+def test_news_item_scores_the_article_not_its_first_ticker() -> None:
+    """The row's colour must come from this headline, not from whichever ticker sorted first."""
+    sentiment = {"n1": {"sentiment_score": 0.4, "sentiment_label": "BULLISH"}}
+    item = mappers.news_item(_news_row(), sentiment)
     assert item.sentiment_score == 0.4
     assert item.sentiment_label == "BULLISH"
 
-    # no tagged ticker or no sentiment row stays null, never zero
-    bare = mappers.news_item({**row, "tickers": []}, sentiment)
+
+def test_an_unscored_article_stays_null_never_zero() -> None:
+    bare = mappers.news_item(_news_row(), {})
     assert bare.sentiment_score is None
     assert bare.sentiment_label is None
     assert bare.sentiment_provenance is None
 
 
-def test_news_item_carries_sentiment_provenance() -> None:
-    row = {
-        "item_id": "n1", "trade_date": date(2026, 7, 3), "source": "KONTAN", "lang": "id",
-        "title": "t", "summary": None, "url": "https://x", "published_at": datetime.now(UTC),
-        "tickers": ["BBRI"],
+def test_each_ticker_in_a_multi_ticker_article_keeps_its_own_read() -> None:
+    """One headline can be good for one issuer and bad for another."""
+    breakdown = {
+        "n1": [
+            {"ticker": "BBCA", "sentiment_score": 0.5, "sentiment_label": "BULLISH", "relevance": "PRIMARY"},
+            {"ticker": "BMRI", "sentiment_score": -0.3, "sentiment_label": "BEARISH", "relevance": "SECONDARY"},
+        ]
     }
+    item = mappers.news_item(_news_row(), {"n1": {"sentiment_score": 0.2}}, breakdown)
+    by_ticker = {t.ticker: t for t in item.ticker_sentiments}
+    assert by_ticker["BBCA"].sentiment_label == "BULLISH"
+    assert by_ticker["BMRI"].sentiment_label == "BEARISH"
+    assert by_ticker["BMRI"].relevance == "SECONDARY"
+
+
+def test_a_tagged_but_unscored_ticker_still_gets_a_chip() -> None:
+    """The ticker stays clickable even before its verdict lands."""
+    item = mappers.news_item(_news_row(tickers=["BBCA", "GOTO"]), {}, {})
+    assert [t.ticker for t in item.ticker_sentiments] == ["BBCA", "GOTO"]
+    assert all(t.sentiment_score is None for t in item.ticker_sentiments)
+
+
+def test_a_macro_article_with_no_tickers_still_carries_a_score() -> None:
+    """Two thirds of the live feed looks like this and it must not render blank."""
+    sentiment = {"n1": {"sentiment_score": -0.25, "sentiment_label": "BEARISH"}}
+    item = mappers.news_item(_news_row(tickers=[]), sentiment)
+    assert item.sentiment_score == -0.25
+    assert item.ticker_sentiments == []
+
+
+def test_news_item_carries_the_models_reasoning_and_evidence() -> None:
+    """These two are what the article pane renders; dropping them was the original bug."""
     sentiment = {
-        "BBRI": {
+        "n1": {
+            "sentiment_score": -0.4, "sentiment_label": "BEARISH",
+            "rationale": "Provisioning guidance rose while loan growth held flat.",
+            "drivers": ["provisi naik", "NIM tertekan"],
+        }
+    }
+    item = mappers.news_item(_news_row(), sentiment)
+    assert item.sentiment_rationale == "Provisioning guidance rose while loan growth held flat."
+    assert item.sentiment_drivers == ["provisi naik", "NIM tertekan"]
+
+
+def test_a_pre_v2_article_reports_no_reasoning_rather_than_an_empty_one() -> None:
+    """Absent has to stay absent so the pane can fall back to the evidence phrases."""
+    item = mappers.news_item(_news_row(), {"n1": {"sentiment_score": 0.1, "drivers": ["cuan"]}})
+    assert item.sentiment_rationale is None
+    assert item.sentiment_drivers == ["cuan"]
+
+    unscored = mappers.news_item(_news_row(), {})
+    assert unscored.sentiment_rationale is None and unscored.sentiment_drivers == []
+
+
+def test_news_item_carries_sentiment_provenance() -> None:
+    row = _news_row(tickers=["BBRI"])
+    sentiment = {
+        "n1": {
             "sentiment_score": -0.38, "sentiment_label": "BEARISH", "confidence": 0.7,
-            "artifact_id": "art-1", "provider": "gemini", "model": "gemini-2.5-flash-lite",
-            "prompt_version": "sent-v4", "generated_at": datetime.now(UTC),
-            "evidence_item_ids": ["n1", "n2"],
+            "artifact_id": "art-1", "provider": "gemini", "model": "gemini-3.1-flash-lite",
+            "prompt_version": "art-sent-v1", "generated_at": datetime.now(UTC),
+            "evidence_item_ids": ["n1"],
         }
     }
     provenance = {"art-1": {"run_id": "run-9", "trace_id": "tr-9"}}
-    item = mappers.news_item(row, sentiment, provenance)
+    item = mappers.news_item(row, sentiment, {}, provenance)
     prov = item.sentiment_provenance
     assert prov is not None
     assert prov.artifact_id == "art-1"
     assert prov.run_id == "run-9"
     assert prov.trace_id == "tr-9"
     assert prov.provider == "gemini"
-    assert prov.evidence_item_ids == ["n1", "n2"]
 
     # fail-open: no ledger row means score/provider still set, run link null
-    off_ledger = mappers.news_item(row, sentiment, {})
+    off_ledger = mappers.news_item(row, sentiment, {}, {})
     assert off_ledger.sentiment_provenance is not None
     assert off_ledger.sentiment_provenance.run_id is None
     assert off_ledger.sentiment_provenance.trace_id is None

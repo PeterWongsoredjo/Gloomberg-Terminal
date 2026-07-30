@@ -13,7 +13,13 @@ from app.lifespan import AppState
 from app.serving import mappers
 from app.serving.envelope import build_envelope
 from app.serving.models import NewsFeedPage
-from app.serving.news_merge import decode_news_cursor, merge_latest_sentiment, merge_news, news_cursor
+from app.serving.news_merge import (
+    decode_news_cursor,
+    merge_article_sentiment,
+    merge_news,
+    merge_ticker_breakdown,
+    news_cursor,
+)
 from app.serving.pagination import CursorError, clamp_limit, decode_str_cursor, encode_str_cursor
 from app.serving.readers.gold import ServingGoldReader
 from app.serving.readers.postgres import ServingPostgresReader
@@ -42,14 +48,17 @@ async def get_news_feed(
     page_rows, has_more = merge_news(gold_rows, pg_rows, size)
 
     next_cursor = encode_str_cursor(news_cursor(page_rows[-1])) if has_more else None
-    tickers = _first_tickers(page_rows)
-    sentiment = merge_latest_sentiment(
-        await gold.latest_sentiment(tickers), await pg.latest_intraday_sentiment(tickers)
+    item_ids = [str(r["item_id"]) for r in page_rows]
+    sentiment = merge_article_sentiment(
+        await gold.article_sentiment(item_ids), await pg.article_sentiment(item_ids)
+    )
+    breakdown = merge_ticker_breakdown(
+        await gold.article_ticker_sentiment(item_ids), await pg.article_ticker_sentiment(item_ids)
     )
     # the ledger hop resolves run/trace ids; a down pool degrades to no run link, never a 500
     provenance = await pg.artifact_provenance(_artifact_ids(sentiment))
     page = NewsFeedPage(
-        rows=[mappers.news_item(r, sentiment, provenance) for r in page_rows],
+        rows=[mappers.news_item(r, sentiment, breakdown, provenance) for r in page_rows],
         next_cursor=next_cursor,
     )
 
@@ -59,20 +68,10 @@ async def get_news_feed(
     return build_envelope(page, data_as_of=data_as_of, trade_date=trade_date, slo_engine=app_state.slo_engine)
 
 
-def _first_tickers(rows: list[dict[str, Any]]) -> list[str]:
-    """Each headline's first tagged ticker, deduplicated, for the sentiment lookup."""
-    seen: dict[str, None] = {}
-    for row in rows:
-        tickers = list(row.get("tickers") or [])
-        if tickers:
-            seen.setdefault(str(tickers[0]), None)
-    return list(seen)
-
-
-def _artifact_ids(sentiment_by_ticker: dict[str, dict[str, Any]]) -> list[str]:
+def _artifact_ids(sentiment_by_item: dict[str, dict[str, Any]]) -> list[str]:
     """The distinct sentiment artifact ids on this page, for the batched ledger lookup."""
     seen: dict[str, None] = {}
-    for sentiment in sentiment_by_ticker.values():
+    for sentiment in sentiment_by_item.values():
         artifact_id = sentiment.get("artifact_id")
         if artifact_id is not None:
             seen.setdefault(str(artifact_id), None)

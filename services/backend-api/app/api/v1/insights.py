@@ -19,7 +19,7 @@ from app.serving.readers.postgres import ServingPostgresReader
 
 router = APIRouter()
 
-_INSIGHT_OBJECTIVE = "insight_synthesis"
+_INSIGHT_OBJECTIVE = "intraday_insight"
 
 
 @router.get("/insights/{ticker}", response_model=Envelope[InsightPanel])

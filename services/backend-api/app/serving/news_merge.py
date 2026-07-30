@@ -60,6 +60,25 @@ def freshest(gold: dict[str, Any] | None, pg: dict[str, Any] | None) -> dict[str
     return pg if _as_utc(pg["generated_at"]) > _as_utc(gold["generated_at"]) else gold
 
 
+def merge_article_sentiment(
+    gold: dict[str, dict[str, Any]], pg: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Per article, the row with the newest generated_at wins."""
+    merged = dict(gold)
+    for item_id, row in pg.items():
+        current = merged.get(item_id)
+        if current is None or _as_utc(row["generated_at"]) > _as_utc(current["generated_at"]):
+            merged[item_id] = row
+    return merged
+
+
+def merge_ticker_breakdown(
+    gold: dict[str, list[dict[str, Any]]], pg: dict[str, list[dict[str, Any]]]
+) -> dict[str, list[dict[str, Any]]]:
+    """Per article, whichever source has the breakdown; intraday is the fresher writer."""
+    return {**gold, **pg}
+
+
 def merge_latest_sentiment(
     gold: dict[str, dict[str, Any]], pg: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
