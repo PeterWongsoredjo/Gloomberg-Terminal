@@ -40,12 +40,13 @@ def _record_phases(monkeypatch: pytest.MonkeyPatch, order: list[str]) -> None:
     ) -> PhaseResult:
         order.append(phase)
         try:
-            return fn()
+            result: PhaseResult = fn()
         except Exception as exc:
-            handled = on_error(exc) if on_error else None
+            handled: PhaseResult | None = on_error(exc) if on_error else None
             if handled is None:
                 raise
             return handled
+        return result
 
     monkeypatch.setattr(flow_mod, "run_phase", run_phase)
 

@@ -42,7 +42,7 @@ def _patch_connect(
     monkeypatch: pytest.MonkeyPatch, rows: list[tuple[str, ...]], captured: dict[str, Any]
 ) -> None:
     monkeypatch.setattr(
-        subjects_mod.psycopg, "connect", lambda *a, **k: _FakeConn(rows, captured)
+        "orchestration.tasks.subjects.psycopg.connect", lambda *a, **k: _FakeConn(rows, captured)
     )
 
 
@@ -52,7 +52,7 @@ def test_an_empty_universe_never_reaches_postgres(monkeypatch: pytest.MonkeyPatc
     def explode(*args: object, **kwargs: object) -> None:
         raise AssertionError("an empty universe must short-circuit before connecting")
 
-    monkeypatch.setattr(subjects_mod.psycopg, "connect", explode)
+    monkeypatch.setattr("orchestration.tasks.subjects.psycopg.connect", explode)
 
     assert subjects_mod.stale_insight_subjects("dsn", TD, 8, []) == []
     assert subjects_mod.day_insight_subjects("dsn", TD, 8, []) == []
@@ -81,7 +81,7 @@ def test_an_unreachable_postgres_yields_no_subjects(monkeypatch: pytest.MonkeyPa
     def boom(*args: object, **kwargs: object) -> None:
         raise psycopg.OperationalError("down")
 
-    monkeypatch.setattr(subjects_mod.psycopg, "connect", boom)
+    monkeypatch.setattr("orchestration.tasks.subjects.psycopg.connect", boom)
 
     assert subjects_mod.stale_insight_subjects("dsn", TD, 8, ["BBCA"]) == []
     assert subjects_mod.day_insight_subjects("dsn", TD, 8, ["BBCA"]) == []
