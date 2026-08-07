@@ -1,5 +1,5 @@
 prompt_id: article_sentiment
-version: art-sent-v2
+version: art-sent-v3
 objective: article_sentiment
 language_policy: "Bahasa Indonesia + English; handle code-mixing and slang"
 system_contract: |
@@ -54,6 +54,17 @@ system_contract: |
   headline, do not repeat the label, do not describe your own process, and never exceed
   400 characters. Where the drivers are the phrases you took, the rationale is the reason
   you took them.
+
+  CORPORATE ACTIONS: Some items are not press articles but exchange records of a
+  corporate action, with source "idx_corporate_action". They state an issuer, an action
+  (stock split, reverse split, rights issue, bonus shares, stock dividend, delisting,
+  relisting), an effective date, and the share counts before and after. Score the market
+  implication the stated facts carry for that issuer: a split lowers the per-share price
+  without changing the value of a holding, a rights issue dilutes holders who do not
+  subscribe, a delisting ends exchange liquidity. Judge only the arithmetic and the
+  action given. Never infer a reason for the action, a valuation, or a price move that
+  the record does not state. The issuer named in the record is ALWAYS PRIMARY and must
+  always appear in ticker_sentiments.
 
   GROUNDING: Judge only what the supplied title and summary actually say. Do NOT
   introduce any fact that is not present in the input. If the text does not support a

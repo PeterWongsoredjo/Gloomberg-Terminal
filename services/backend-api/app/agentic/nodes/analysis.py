@@ -49,9 +49,19 @@ def _batch_tasks(state: AgentState, batch_size: int, correction: list[str]) -> l
                 "subject": {"ticker": None, "security_id": None},
                 "user": user_payload(payload),
                 "pool": sorted(item_ids(chunk)),
+                "item_tickers": _item_tickers(chunk),
             }
         )
     return tasks
+
+
+def _item_tickers(chunk: list[dict[str, Any]]) -> dict[str, set[str]]:
+    """The issuers each item already names on its own authority, keyed by item_id."""
+    return {
+        str(item["item_id"]): {str(t) for t in (item.get("tickers") or [])}
+        for item in chunk
+        if item.get("item_id") is not None
+    }
 
 
 def _subject_rows(state: AgentState) -> list[dict[str, Any]]:
@@ -144,12 +154,14 @@ async def _tier2_cache(deps: Any, state: AgentState) -> list[dict[str, Any]] | N
     return stale
 
 
-def _split_tickers(entries: list[dict[str, Any]], resolver: EntityResolver) -> tuple[list[dict[str, Any]], list[str]]:
-    """Keeps the issuers the registry knows and sets the invented ones aside."""
+def _split_tickers(
+    entries: list[dict[str, Any]], resolver: EntityResolver, authoritative: set[str]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Keeps the issuers the registry knows or the item itself named, drops the invented ones."""
     kept, dropped = [], []
     for entry in entries:
         ticker = str(entry.get("ticker") or "")
-        if resolver.is_known(ticker):
+        if resolver.is_known(ticker) or ticker in authoritative:
             kept.append(entry)
         else:
             dropped.append(ticker)
@@ -172,9 +184,13 @@ def _fan_out(result: dict[str, Any], task: dict[str, Any], resolver: EntityResol
                  "evidence_pool": task["pool"], "prompt_tokens": result["prompt_tokens"],
                  "completion_tokens": result["completion_tokens"]}]
 
+    item_tickers: dict[str, set[str]] = task.get("item_tickers") or {}
     drafts = []
     for index, verdict in enumerate(verdicts):
-        kept, dropped = _split_tickers(verdict.get("ticker_sentiments") or [], resolver)
+        authoritative = item_tickers.get(str(verdict.get("item_id")), set())
+        kept, dropped = _split_tickers(
+            verdict.get("ticker_sentiments") or [], resolver, authoritative
+        )
         drafts.append(
             {
                 **base,

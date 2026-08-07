@@ -102,10 +102,18 @@ def test_sentiment_type_stays_pinned_to_daily() -> None:
 
 def test_article_prompt_is_registered() -> None:
     prompt = get_prompt("article_sentiment")
-    assert prompt.version == "art-sent-v2"
+    assert prompt.version == "art-sent-v3"
     assert "NON-ADVISORY" in prompt.system_contract
     assert "IHSG" in prompt.system_contract
     assert "rationale" in prompt.system_contract
+
+
+def test_the_article_prompt_covers_corporate_actions() -> None:
+    """Corporate actions ride this prompt, and the entity gate drops a verdict with no issuer."""
+    contract = get_prompt("article_sentiment").system_contract
+    assert "CORPORATE ACTIONS" in contract
+    assert "idx_corporate_action" in contract
+    assert "ALWAYS PRIMARY" in contract
 
 
 def test_value_confidence_rekeys_by_artifact_type() -> None:
@@ -302,6 +310,60 @@ async def test_an_unlisted_ticker_is_dropped_not_stored(
     artifact = final["artifacts"][0]
     assert [t["ticker"] for t in artifact["value"]["ticker_sentiments"]] == ["BBCA"]
     assert artifact["value"]["dropped_tickers"] == ["UMKM"]
+
+
+async def test_a_delisted_issuer_named_by_the_item_survives_the_registry_gate(
+    deps_factory: Callable[..., GraphDeps], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A delisting is about an issuer the registry no longer lists, so the gate must not eat it.
+
+    Without this the whole DELISTING class burns three attempts and lands UNSCOREABLE:
+    the resolver only knows currently listed issuers, and a delisting verdict is never NEUTRAL.
+    """
+    feed = [_news_item("corp_action:idx_ca:82392", ["MFIN"], title="MFIN delisting, effective 22 Jun 2026")]
+    _patch_news(monkeypatch, feed, "article_sentiment")
+    verdict = article_verdict(
+        "corp_action:idx_ca:82392",
+        label="BEARISH",
+        score=-0.6,
+        tickers=[
+            {"ticker": "MFIN", "sentiment_score": -0.6, "sentiment_label": "BEARISH", "relevance": "PRIMARY"},
+        ],
+    )
+
+    slots = {"gemini": make_slot(ScriptedProvider("gemini", lambda _r: article_batch_response([verdict])))}
+    final = await run_agentic(
+        build_graph(None), deps_factory(slots), objective="article_sentiment",
+        trade_date="2026-07-03", universe=[],
+    )
+
+    assert final["status"] == "SUCCEEDED"
+    artifact = final["artifacts"][0]
+    assert [t["ticker"] for t in artifact["value"]["ticker_sentiments"]] == ["MFIN"]
+    assert artifact["value"]["dropped_tickers"] == []
+
+
+async def test_an_invented_ticker_is_still_dropped_when_the_item_never_named_it(
+    deps_factory: Callable[..., GraphDeps], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Trusting the item's own tickers must not reopen the hallucination hole."""
+    feed = [_news_item("poll:1", ["BBCA"])]
+    _patch_news(monkeypatch, feed, "article_sentiment")
+    verdict = article_verdict(
+        "poll:1",
+        tickers=[
+            {"ticker": "BBCA", "sentiment_score": 0.3, "sentiment_label": "BULLISH", "relevance": "PRIMARY"},
+            {"ticker": "ZZZZ", "sentiment_score": 0.1, "sentiment_label": "NEUTRAL", "relevance": "INCIDENTAL"},
+        ],
+    )
+
+    slots = {"gemini": make_slot(ScriptedProvider("gemini", lambda _r: article_batch_response([verdict])))}
+    final = await run_agentic(
+        build_graph(None), deps_factory(slots), objective="article_sentiment",
+        trade_date="2026-07-03", universe=[],
+    )
+
+    assert final["artifacts"][0]["value"]["dropped_tickers"] == ["ZZZZ"]
 
 
 async def test_a_macro_article_with_no_issuer_still_scores(
