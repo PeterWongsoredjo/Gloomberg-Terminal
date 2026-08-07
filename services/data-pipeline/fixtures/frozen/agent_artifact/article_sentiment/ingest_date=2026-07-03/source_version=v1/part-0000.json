@@ -1,0 +1,98 @@
+[
+  {
+    "artifact_id": "01ARTSENTCNBC00000000000000",
+    "run_id": "01RUNFIXTUREART00000000000",
+    "artifact_type": "ARTICLE_SENTIMENT",
+    "security_id": null,
+    "ticker": null,
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "item_id": "cnbc_market:aa11bb22cc33dd44",
+      "sentiment_score": 0.42,
+      "sentiment_label": "BULLISH",
+      "rationale": "Laba bersih naik dengan pertumbuhan kredit dua digit, yang menopang tone positif untuk BBCA.",
+      "drivers": ["laba bersih naik", "pertumbuhan kredit dua digit"],
+      "ticker_sentiments": [
+        {
+          "ticker": "BBCA",
+          "sentiment_score": 0.42,
+          "sentiment_label": "BULLISH",
+          "relevance": "PRIMARY"
+        }
+      ],
+      "dropped_tickers": [],
+      "self_confidence": 0.81
+    },
+    "confidence": 0.81,
+    "quality_flags": [],
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+    "prompt_version": "art-sent-v3",
+    "generated_at": "2026-07-03T09:20:11+00:00"
+  },
+  {
+    "artifact_id": "01ARTSENTKONTAN000000000000",
+    "run_id": "01RUNFIXTUREART00000000000",
+    "artifact_type": "ARTICLE_SENTIMENT",
+    "security_id": null,
+    "ticker": null,
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "item_id": "kontan_investasi:ee55ff66aa77bb88",
+      "sentiment_score": -0.38,
+      "sentiment_label": "BEARISH",
+      "rationale": "Aliran jual asing yang berlanjut menekan tone artikel untuk BBRI.",
+      "drivers": ["asing net sell", "net sell berlanjut"],
+      "ticker_sentiments": [
+        {
+          "ticker": "BBRI",
+          "sentiment_score": -0.38,
+          "sentiment_label": "BEARISH",
+          "relevance": "PRIMARY"
+        }
+      ],
+      "dropped_tickers": [],
+      "self_confidence": 0.7
+    },
+    "confidence": 0.7,
+    "quality_flags": [],
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+    "prompt_version": "art-sent-v3",
+    "generated_at": "2026-07-03T09:20:12+00:00"
+  },
+  {
+    "artifact_id": "01ARTSENTCORPAADI0000000000",
+    "run_id": "01RUNFIXTUREART00000000000",
+    "artifact_type": "ARTICLE_SENTIMENT",
+    "security_id": null,
+    "ticker": null,
+    "window_from": "2026-07-03",
+    "window_to": "2026-07-03",
+    "value": {
+      "item_id": "corp_action:idx_ca:999001",
+      "sentiment_score": 0.22,
+      "sentiment_label": "BULLISH",
+      "rationale": "A five-for-one stock split lowers the per-share price and widens retail access without changing the value of the holding.",
+      "drivers": ["stock split", "shares outstanding go from 7786891760 to 38934458800"],
+      "ticker_sentiments": [
+        {
+          "ticker": "AADI",
+          "sentiment_score": 0.22,
+          "sentiment_label": "BULLISH",
+          "relevance": "PRIMARY"
+        }
+      ],
+      "dropped_tickers": [],
+      "self_confidence": 0.66
+    },
+    "confidence": 0.66,
+    "quality_flags": [],
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+    "prompt_version": "art-sent-v3",
+    "generated_at": "2026-07-03T09:20:13+00:00"
+  }
+]
