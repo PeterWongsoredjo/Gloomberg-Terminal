@@ -53,6 +53,8 @@ security as (
 
 news as (
     select item_id, published_at from {{ ref('fct_news_item') }}
+    union all
+    select item_id, published_at from {{ ref('fct_corporate_action_news') }}
 )
 
 select
