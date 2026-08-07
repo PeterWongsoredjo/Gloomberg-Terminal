@@ -64,14 +64,17 @@ export interface NewsTickerSentiment {
   relevance: string | null;
 }
 
+export type NewsItemType = "ARTICLE" | "CORPORATE_ACTION";
+
 export interface NewsItem {
   item_id: string;
+  item_type: NewsItemType;
   trade_date: string;
   source: string;
   lang: string | null;
   title: string;
   summary: string | null;
-  url: string;
+  url: string | null;
   published_at: string;
   tickers: string[];
   sentiment_score: number | null;

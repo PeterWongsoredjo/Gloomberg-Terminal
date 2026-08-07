@@ -5,7 +5,13 @@ import { Brain, Zap } from "lucide-react";
 
 import { feedRows, useNewsFeed } from "@/lib/api/hooks";
 import { fmtWibDateTime } from "@/lib/format";
-import { LINK_CLASS, UNSCORED_CLASS, labelClass, sentimentGlyph } from "@/lib/palette";
+import {
+  CORP_ACTION_CLASS,
+  LINK_CLASS,
+  UNSCORED_CLASS,
+  labelClass,
+  sentimentGlyph,
+} from "@/lib/palette";
 
 import { LinkOut } from "./link-out";
 import { PanelStatus } from "./panel-status";
@@ -30,7 +36,9 @@ export function ArticleInference({ itemId }: ArticleInferenceProps) {
       <div className="flex items-center justify-between border-b border-zinc-800 bg-[#121212] px-2 py-1 text-zinc-400">
         <span className="flex items-center gap-2 tracking-widest">
           <Brain className="h-3 w-3" />
-          [AI READ ON THIS ARTICLE]
+          {item?.item_type === "CORPORATE_ACTION"
+            ? "[AI READ ON THIS CORPORATE ACTION]"
+            : "[AI READ ON THIS ARTICLE]"}
         </span>
         {provenance && (
           <button
@@ -60,7 +68,11 @@ export function ArticleInference({ itemId }: ArticleInferenceProps) {
       {item && (
         <div className="min-h-0 flex-1 overflow-auto p-2">
           <div className="flex items-center gap-1.5 text-[10px]">
-            <span className={LINK_CLASS}>{`[${item.source}]`}</span>
+            {item.item_type === "CORPORATE_ACTION" ? (
+              <span className={CORP_ACTION_CLASS}>CORP ACTION</span>
+            ) : (
+              <span className={LINK_CLASS}>{`[${item.source}]`}</span>
+            )}
             <span className="text-zinc-500">{fmtWibDateTime(item.published_at)}</span>
           </div>
           <p className="mt-0.5 leading-snug text-zinc-200">{item.title}</p>

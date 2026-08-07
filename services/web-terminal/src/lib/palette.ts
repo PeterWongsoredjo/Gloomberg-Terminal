@@ -9,6 +9,9 @@ export const LINK_CLASS = "text-[#4DA6FF]";
 export const NEUTRAL_CLASS = "text-zinc-300";
 export const UNSCORED_CLASS = "text-zinc-600";
 
+export const CORP_ACTION_CLASS =
+  "shrink-0 border border-[#4DA6FF] px-1 leading-none tracking-wide text-[#4DA6FF]";
+
 /** Green above zero, red below, muted when unknown. */
 export function signClass(value: number | null | undefined): string {
   if (value === null || value === undefined) return FLAT_CLASS;

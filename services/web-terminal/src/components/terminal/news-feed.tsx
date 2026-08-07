@@ -5,7 +5,14 @@ import { Newspaper } from "lucide-react";
 
 import { feedRows, useNewsFeed } from "@/lib/api/hooks";
 import { fmtWibTime } from "@/lib/format";
-import { LINK_CLASS, UNSCORED_CLASS, WARN_CLASS, labelClass, sentimentGlyph } from "@/lib/palette";
+import {
+  CORP_ACTION_CLASS,
+  LINK_CLASS,
+  UNSCORED_CLASS,
+  WARN_CLASS,
+  labelClass,
+  sentimentGlyph,
+} from "@/lib/palette";
 import type { NewsItem } from "@/lib/types/api";
 
 import { PanelStatus } from "./panel-status";
@@ -88,7 +95,11 @@ export function NewsFeed({ onSelectTicker, onSelectArticle, selectedItemId }: Ne
             >
               <div className="flex items-center justify-between text-[10px]">
                 <div className="flex min-w-0 flex-1 items-center gap-1 truncate">
-                  <span className={LINK_CLASS}>{`[${n.source}]`}</span>
+                  {n.item_type === "CORPORATE_ACTION" ? (
+                    <span className={CORP_ACTION_CLASS}>CORP ACTION</span>
+                  ) : (
+                    <span className={LINK_CLASS}>{`[${n.source}]`}</span>
+                  )}
                   <span className="text-zinc-500">{fmtWibTime(n.published_at)}</span>
                   {/* one chip per issuer, each tinted by its own read and clickable on its own */}
                   {n.ticker_sentiments.map((t) => (
