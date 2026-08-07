@@ -8,7 +8,7 @@ from typing import Any
 
 from app.core.enums import QualityFlag
 from app.serving import mappers
-from app.serving.models import InsightScope, InsightStatus, PriceLimit
+from app.serving.models import InsightScope, InsightStatus, NewsItemType, PriceLimit
 
 
 def _tape_raw(**over: Any) -> dict[str, Any]:
@@ -205,6 +205,31 @@ def test_news_item_carries_sentiment_provenance() -> None:
     assert off_ledger.sentiment_provenance.trace_id is None
     assert off_ledger.sentiment_provenance.provider == "gemini"
     assert off_ledger.sentiment_score == -0.38
+
+
+def test_a_corporate_action_row_carries_its_type_and_a_null_url() -> None:
+    """IDX publishes no per-event page, so the url is absent rather than invented."""
+    row = _news_row("corp_action:idx_ca:999001", ["AADI"])
+    row["item_type"] = "CORPORATE_ACTION"
+    row["url"] = None
+
+    item = mappers.news_item(row, {"corp_action:idx_ca:999001": {"sentiment_label": "BULLISH"}})
+
+    assert item.item_type == NewsItemType.CORPORATE_ACTION
+    assert item.url is None
+    assert item.sentiment_label == "BULLISH"
+
+
+def test_a_row_without_the_type_column_reads_as_an_article() -> None:
+    """A snapshot published before the column existed must not 500 the feed."""
+    assert mappers.news_item(_news_row()).item_type == NewsItemType.ARTICLE
+
+
+def test_an_unknown_type_is_not_trusted_as_a_new_kind() -> None:
+    """Vocabulary drift falls back to article rather than inventing a rendering branch."""
+    row = _news_row()
+    row["item_type"] = "PRESS_RELEASE"
+    assert mappers.news_item(row).item_type == NewsItemType.ARTICLE
 
 
 def test_data_telemetry_parses_json_columns() -> None:

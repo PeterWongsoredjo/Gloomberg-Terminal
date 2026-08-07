@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import duckdb
 import pytest
 
@@ -57,3 +59,52 @@ async def test_a_missing_table_still_degrades(
     assert await reader.article_sentiment(["n1"]) == {}
     assert await reader.insight("BBCA") is None
     assert await reader.news(10, None) == []
+    assert await reader.corporate_action_news(10, None) == []
+
+
+@pytest.fixture
+def feed_snapshot() -> duckdb.DuckDBPyConnection:
+    """A snapshot carrying both feed tables, three items apiece to page through."""
+    con = duckdb.connect()
+    for table in ("fct_news_item", "fct_corporate_action_news"):
+        con.execute(
+            f"create table {table}(item_id varchar, trade_date date, source varchar, "
+            "lang varchar, title varchar, summary varchar, url varchar, "
+            "published_at timestamp, tickers varchar[])"
+        )
+    con.execute(
+        "insert into fct_news_item values "
+        "('a1','2026-07-10','cnbc','id','t1',null,'u','2026-07-10 03:00:00',[]),"
+        "('a2','2026-07-09','cnbc','id','t2',null,'u','2026-07-09 03:00:00',[])"
+    )
+    con.execute(
+        "insert into fct_corporate_action_news values "
+        "('corp_action:c1','2026-07-10','idx_corporate_action','en','AADI stock split',"
+        "'s',null,'2026-07-10 00:00:00',['AADI'])"
+    )
+    return con
+
+
+async def test_each_feed_read_stamps_its_own_item_type(
+    feed_snapshot: duckdb.DuckDBPyConnection,
+) -> None:
+    """The discriminator is stamped by the reader, so fct_news_item needs no new column."""
+    reader = ServingGoldReader(feed_snapshot)
+
+    assert {r["item_type"] for r in await reader.news(10, None)} == {"ARTICLE"}
+    corp = await reader.corporate_action_news(10, None)
+    assert {r["item_type"] for r in corp} == {"CORPORATE_ACTION"}
+    assert corp[0]["url"] is None
+
+
+async def test_the_cursor_clause_pages_both_feeds_identically(
+    feed_snapshot: duckdb.DuckDBPyConnection,
+) -> None:
+    """Both reads must honour the same cursor or the merged page loses rows."""
+    reader = ServingGoldReader(feed_snapshot)
+    before = (datetime(2026, 7, 10, 3, 0, tzinfo=timezone.utc), "a1")
+
+    assert [r["item_id"] for r in await reader.news(10, before)] == ["a2"]
+    assert [r["item_id"] for r in await reader.corporate_action_news(10, before)] == [
+        "corp_action:c1"
+    ]

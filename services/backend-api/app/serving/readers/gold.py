@@ -59,8 +59,10 @@ class ServingGoldReader:
         rows = await self._safe(sql, [ticker, limit_days])
         return list(reversed(rows))
 
-    async def news(self, limit: int, before: tuple[datetime, str] | None) -> list[dict[str, Any]]:
-        """Newest headlines, optionally paged behind a (published_at, item_id) cursor."""
+    async def _feed_page(
+        self, table: str, item_type: str, limit: int, before: tuple[datetime, str] | None
+    ) -> list[dict[str, Any]]:
+        """One cursor-paged page of feed items out of a fct_news_item-shaped table."""
         params: list[Any] = []
         clause = ""
         if before is not None:
@@ -70,13 +72,26 @@ class ServingGoldReader:
             params.extend([naive, naive, before[1]])
         params.append(limit)
         sql = f"""
-            select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
-            from fct_news_item
+            select item_id, trade_date, source, lang, title, summary, url, published_at,
+                   tickers, '{item_type}' as item_type
+            from {table}
             {clause}
             order by published_at desc, item_id desc
             limit ?
         """
         return await self._safe(sql, params)
+
+    async def news(self, limit: int, before: tuple[datetime, str] | None) -> list[dict[str, Any]]:
+        """Newest headlines, optionally paged behind a (published_at, item_id) cursor."""
+        return await self._feed_page("fct_news_item", "ARTICLE", limit, before)
+
+    async def corporate_action_news(
+        self, limit: int, before: tuple[datetime, str] | None
+    ) -> list[dict[str, Any]]:
+        """Corporate actions as feed items, read separately so a missing table costs only these."""
+        return await self._feed_page(
+            "fct_corporate_action_news", "CORPORATE_ACTION", limit, before
+        )
 
     async def article_sentiment(self, item_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Each article's own verdict from Gold, for headlines past the intraday window."""

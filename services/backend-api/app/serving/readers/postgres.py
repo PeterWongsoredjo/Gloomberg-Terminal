@@ -66,14 +66,16 @@ class ServingPostgresReader:
         """Freshly polled headlines not yet in Gold, same cursor shape as the Gold read."""
         if before is None:
             sql = """
-                select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
+                select item_id, trade_date, source, lang, title, summary, url, published_at,
+                       tickers, item_type
                 from intraday.news_item
                 order by published_at desc, item_id desc
                 limit $1
             """
             return await self._fetch(sql, limit)
         sql = """
-            select item_id, trade_date, source, lang, title, summary, url, published_at, tickers
+            select item_id, trade_date, source, lang, title, summary, url, published_at,
+                   tickers, item_type
             from intraday.news_item
             where published_at < $1 or (published_at = $1 and item_id < $2)
             order by published_at desc, item_id desc

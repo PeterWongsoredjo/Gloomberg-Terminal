@@ -247,14 +247,20 @@ class NewsTickerSentiment(_Model):
     relevance: str | None
 
 
+class NewsItemType(StrEnum):
+    ARTICLE = "ARTICLE"
+    CORPORATE_ACTION = "CORPORATE_ACTION"
+
+
 class NewsItem(_Model):
     item_id: str
+    item_type: NewsItemType
     trade_date: date
     source: str
     lang: str | None
     title: str
     summary: str | None
-    url: str
+    url: str | None
     published_at: datetime
     tickers: list[str]
     sentiment_score: float | None

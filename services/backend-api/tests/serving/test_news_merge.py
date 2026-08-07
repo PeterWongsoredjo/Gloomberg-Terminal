@@ -147,3 +147,25 @@ def test_freshest_compares_across_timestamp_shapes() -> None:
     gold = {"artifact_id": "g", "generated_at": "2026-07-14 03:00:00"}
     pg = {"artifact_id": "p", "generated_at": _utc(4)}
     assert freshest(gold, pg) is pg
+
+
+def test_corporate_actions_join_the_gold_side_without_colliding() -> None:
+    """Namespaced item_ids mean the merge dedupes correctly across all three sources."""
+    articles = [_row("cnbc:aa", _utc(3)), _row("kontan:bb", _utc(1))]
+    corporate = [_row("corp_action:idx_ca:999001", _utc(2))]
+    intraday = [_row("cnbc:cc", _utc(4))]
+
+    page, has_more = merge_news([*articles, *corporate], intraday, 10)
+
+    assert [r["item_id"] for r in page] == [
+        "cnbc:cc", "cnbc:aa", "corp_action:idx_ca:999001", "kontan:bb",
+    ]
+    assert has_more is False
+
+
+def test_a_corporate_action_in_both_sources_yields_one_row() -> None:
+    """The projection writes the same synthetic id Gold does, so re-runs must not duplicate."""
+    item_id = "corp_action:idx_ca:999001"
+    page, _ = merge_news([_row(item_id, _utc(2))], [_row(item_id, _utc(2))], 10)
+
+    assert [r["item_id"] for r in page] == [item_id]

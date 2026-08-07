@@ -17,6 +17,7 @@ from app.serving.models import (
     MatrixCell,
     MatrixWindow,
     NewsItem,
+    NewsItemType,
     NewsSentimentProvenance,
     NewsTickerSentiment,
     PriceIntegrity,
@@ -43,6 +44,11 @@ def _notation(raw: Any) -> list[str]:
 
 def _integrity(raw: Any) -> PriceIntegrity:
     return PriceIntegrity(raw) if raw in {p.value for p in PriceIntegrity} else PriceIntegrity.CLEAN
+
+
+def _news_item_type(raw: Any) -> NewsItemType:
+    """A feed row's kind, defaulting to article for rows written before the column existed."""
+    return NewsItemType(raw) if raw in {t.value for t in NewsItemType} else NewsItemType.ARTICLE
 
 
 def tape_row(row: dict[str, Any]) -> LiveTapeRow:
@@ -200,12 +206,13 @@ def news_item(
     breakdown = (breakdown_by_item or {}).get(item_id, [])
     return NewsItem(
         item_id=item_id,
+        item_type=_news_item_type(row.get("item_type")),
         trade_date=row["trade_date"],
         source=row["source"],
         lang=row.get("lang"),
         title=row["title"],
         summary=row.get("summary"),
-        url=row["url"],
+        url=_as_str(row.get("url")),
         published_at=row["published_at"],
         tickers=list(row.get("tickers") or []),
         sentiment_score=_as_float(sentiment.get("sentiment_score")),

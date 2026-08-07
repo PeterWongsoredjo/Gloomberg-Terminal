@@ -44,8 +44,9 @@ async def get_news_feed(
     # the intraday reads degrade to empty when the pool is down, leaving Gold-only
     pg = ServingPostgresReader(app_state.pg_pool)
     gold_rows = await gold.news(size + 1, before)
+    corp_rows = await gold.corporate_action_news(size + 1, before)
     pg_rows = await pg.intraday_news(size + 1, before)
-    page_rows, has_more = merge_news(gold_rows, pg_rows, size)
+    page_rows, has_more = merge_news([*gold_rows, *corp_rows], pg_rows, size)
 
     next_cursor = encode_str_cursor(news_cursor(page_rows[-1])) if has_more else None
     item_ids = [str(r["item_id"]) for r in page_rows]
