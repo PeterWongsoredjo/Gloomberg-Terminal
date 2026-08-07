@@ -15,6 +15,10 @@ ranked as (
         s.*,
         row_number() over (partition by ticker order by generated_at desc) as _rn
     from current_sentiment s
+),
+
+index_subject as (
+    select distinct index_id as ticker from {{ ref('fct_index_level') }}
 )
 
 select
@@ -33,3 +37,4 @@ select
 from ranked r
 left join {{ ref('dim_security') }} d on r.security_id = d.security_id and d.is_current
 where r._rn = 1
+    and (r.security_id is not null or r.ticker in (select ticker from index_subject))

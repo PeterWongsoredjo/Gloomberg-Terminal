@@ -28,10 +28,12 @@ models:
       - name: data_as_of
         data_tests: [not_null]
   - name: agg_sentiment_matrix
-    description: "Sentiment Matrix: latest sentiment per security with identity and freshness."
+    description: "Sentiment Matrix: latest sentiment per subject with identity and freshness. An index subject carries a null security_id."
     columns:
-      - name: security_id
+      - name: ticker
         data_tests: [unique, not_null]
+      - name: security_id
+        data_tests: [unique]
       - name: sentiment_label
         data_tests:
           - accepted_values:
