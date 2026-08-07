@@ -31,6 +31,7 @@ from orchestration.tasks.finalize import finalize_run
 from orchestration.tasks.gold_sources import land_agent_artifacts, normalize_news
 from orchestration.tasks.guard import guard_trading_day
 from orchestration.tasks.ingest import ingest_feed, land_failed, load_fixtures_bronze
+from orchestration.tasks.project import project_corporate_actions
 from orchestration.tasks.promote import promote_gold
 from orchestration.tasks.registry import refresh_registry, retag_news
 from orchestration.tasks.subjects import eod_insight_subjects
@@ -86,6 +87,11 @@ def _degrade_on_registry_failure(exc: Exception) -> PhaseResult | None:
 def _degrade_on_landing_failure(exc: Exception) -> PhaseResult | None:
     """A missing landing costs one day of Gold news, not the whole build."""
     return PhaseResult(status="DEGRADED", notes=f"bronze landing failed: {exc}")
+
+
+def _degrade_on_projection_failure(exc: Exception) -> PhaseResult | None:
+    """Unqueued corporate actions cost a day of scoring, and the next run requeues them."""
+    return PhaseResult(status="DEGRADED", notes=f"corporate action projection failed: {exc}")
 
 
 def _degrade_on_insight_build_failure(exc: Exception) -> PhaseResult | None:
@@ -183,10 +189,20 @@ def gloomberg_daily_flow(trade_date: str | None = None) -> str:
         run_phase(dsn, flow_run_id, td, "dbt_build", lambda: dbt_build(config))
         run_phase(dsn, flow_run_id, td, "promote", lambda: promote_gold())
 
+        corporate_actions = run_phase(
+            dsn, flow_run_id, td, "project_corporate_actions",
+            lambda: project_corporate_actions(td), on_error=_degrade_on_projection_failure,
+        )
+
         # after promote, so it reads the closes the day settled on
         insight = _eod_insight_result(dsn, flow_run_id, td, config)
 
-        overall = rollup(gate.status, insight.status, *(landing.status for landing in landings))
+        overall = rollup(
+            gate.status,
+            corporate_actions.status,
+            insight.status,
+            *(landing.status for landing in landings),
+        )
         return overall
     except Exception:
         overall = "FAILED"

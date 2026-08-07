@@ -11,6 +11,7 @@ from prefect import task
 from pipeline.bronze.ingest import client
 from pipeline.bronze.news import day_items, tag_items
 from pipeline.config import get_settings
+from pipeline.gold.corporate_action_news import read_items as read_corporate_action_items
 from pipeline.reference.matcher import Registry
 from pipeline.reference.store import read as read_registry
 
@@ -36,4 +37,20 @@ def project_news(trade_date: date, config: OrchestrationConfig, ingest_run_id: s
         },
         notes=f"{len(items)} items parsed, {len(outcome.new_item_ids)} new",
         ingest_run_id=ingest_run_id,
+    )
+
+
+@task(name="project_corporate_actions")
+def project_corporate_actions(trade_date: date) -> PhaseResult:
+    """Queues the window's corporate actions for scoring, the same way articles are."""
+    settings = get_settings()
+    dsn = settings.postgres_dsn
+    items = read_corporate_action_items(trade_date, settings)
+    if not items:
+        return PhaseResult(status="SKIPPED", notes="no corporate actions in window")
+    outcome = upsert_items(dsn, items, trade_date, None)
+    return PhaseResult(
+        status="SUCCESS",
+        payload={"new_items": outcome.new_item_ids, "tickers": outcome.new_tickers},
+        notes=f"{len(items)} corporate actions in window, {len(outcome.new_item_ids)} new",
     )

@@ -41,6 +41,8 @@ create index if not exists news_item_feed_idx
 alter table intraday.news_item add column if not exists candidate_tickers text[] not null default '{}';
 alter table intraday.news_item add column if not exists tagged_at timestamptz;
 alter table intraday.news_item add column if not exists score_status text not null default 'PENDING';
+alter table intraday.news_item add column if not exists item_type text not null default 'ARTICLE';
+alter table intraday.news_item alter column url drop not null;
 
 update intraday.news_item set score_status = 'SCORED'
     where scored_at is not null and score_status = 'PENDING';
@@ -55,15 +57,15 @@ create index if not exists news_item_pending_idx
 _INSERT = """
 insert into intraday.news_item
     (item_id, trade_date, source, lang, title, summary, url, published_at,
-     tickers, candidate_tickers, tagged_at, ingest_run_id)
-values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     tickers, candidate_tickers, tagged_at, ingest_run_id, item_type)
+values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 on conflict (item_id) do nothing
 returning item_id, tickers
 """
 
 _STALE_FOR_RETAG = """
 select item_id, title, summary from intraday.news_item
-where tagged_at is null or tagged_at < %s
+where item_type = 'ARTICLE' and (tagged_at is null or tagged_at < %s)
 """
 
 _RETAG = """
@@ -115,12 +117,13 @@ def upsert_items(
                         item.get("lang"),
                         str(item["title"]),
                         item.get("summary"),
-                        str(item["url"]),
+                        item.get("url"),
                         _published_at(item["published_at"]),
                         list(item.get("tickers") or []),
                         list(item.get("candidate_tickers") or []),
                         tagged_at,
                         ingest_run_id,
+                        str(item.get("item_type") or "ARTICLE"),
                     ),
                 ).fetchone()
                 if row is not None:
