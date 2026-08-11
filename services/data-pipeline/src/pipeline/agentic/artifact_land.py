@@ -75,6 +75,8 @@ def land_artifacts(minio: Minio, trade_date: date, settings: Settings) -> list[d
 
     manifests = []
     for artifact_type, rows in by_type.items():
+        if not rows:
+            continue
         dataset = _TYPE_TO_DATASET.get(artifact_type, artifact_type.lower())
         payload = json.dumps(rows, ensure_ascii=False).encode("utf-8")
         manifests.append(
