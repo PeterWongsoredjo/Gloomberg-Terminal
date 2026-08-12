@@ -29,14 +29,6 @@ models:
       - name: item_id
         data_tests: [not_null]
 
-  - name: stg_agent_artifact__sentiment
-    description: "Typed SENTIMENT artifacts landed from the agentic ledger."
-    columns:
-      - name: artifact_id
-        data_tests: [not_null]
-      - name: ticker
-        data_tests: [not_null]
-
   - name: stg_agent_artifact__insight
     description: "Typed INSIGHT artifacts landed from the agentic ledger."
     columns:

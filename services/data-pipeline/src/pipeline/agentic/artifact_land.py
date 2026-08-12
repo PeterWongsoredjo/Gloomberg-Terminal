@@ -16,7 +16,6 @@ from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
 _TYPE_TO_DATASET = {
-    "SENTIMENT": "sentiment",
     "ARTICLE_SENTIMENT": "article_sentiment",
     "INSIGHT": "insight",
     "EXTRACTION": "extraction",
