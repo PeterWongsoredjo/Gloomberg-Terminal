@@ -29,7 +29,9 @@ from orchestration.retries import (
 )
 def ingest_feed(feed_name: str, trade_date: date) -> dict[str, Any]:
     settings = get_settings()
-    return fetch_and_land(client(settings), FEEDS[feed_name], trade_date)
+    return fetch_and_land(
+        client(settings), FEEDS[feed_name], trade_date, proxy=settings.webshare_proxy_url
+    )
 
 
 def land_failed(feed_name: str, trade_date: date, reason: str) -> dict[str, Any]:

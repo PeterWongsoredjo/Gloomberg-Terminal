@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 # repo root is four levels up from this file (services/data-pipeline/src/pipeline)
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -40,6 +41,7 @@ class Settings:
     postgres_db: str
     build_duckdb: Path
     published_gold: Path
+    webshare_proxy_url: str | None
 
     @property
     def postgres_dsn(self) -> str:
@@ -49,6 +51,17 @@ class Settings:
             f"port={self.postgres_port} user={self.postgres_user} "
             f"password={self.postgres_password}"
         )
+
+
+def _webshare_proxy_url() -> str | None:
+    """Builds http://user:pass@host:port from the four WEBSHARE_PROXY_* vars, or None."""
+    host = os.environ.get("WEBSHARE_PROXY_HOST")
+    if not host:
+        return None
+    port = os.environ.get("WEBSHARE_PROXY_PORT", "80")
+    user = quote(os.environ["WEBSHARE_PROXY_USERNAME"], safe="")
+    password = quote(os.environ["WEBSHARE_PROXY_PASSWORD"], safe="")
+    return f"http://{user}:{password}@{host}:{port}"
 
 
 @lru_cache(maxsize=1)
@@ -67,4 +80,5 @@ def get_settings() -> Settings:
         postgres_db=os.environ.get("POSTGRES_DB", "gloomberg"),
         build_duckdb=REPO_ROOT / "dbt" / "warehouse" / "build.duckdb",
         published_gold=REPO_ROOT / "services" / "backend-api" / "warehouse" / "gold.duckdb",
+        webshare_proxy_url=_webshare_proxy_url(),
     )

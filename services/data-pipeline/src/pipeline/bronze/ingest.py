@@ -23,8 +23,9 @@ from pipeline.config import BRONZE_BUCKET, Settings
 class FetchError(RuntimeError):
     """Upstream fetch failed, status_code is None for a connect/read timeout."""
 
-    def __init__(self, status_code: int | None, message: str) -> None:
+    def __init__(self, status_code: int | None, message: str, *, via_proxy: bool = False) -> None:
         self.status_code = status_code
+        self.via_proxy = via_proxy
         super().__init__(message)
 
 
@@ -43,14 +44,17 @@ def _put(minio: Minio, key: str, data: bytes, content_type: str) -> None:
     )
 
 
-def fetch(url: str) -> bytes:
+def fetch(url: str, *, proxy: str | None = None) -> bytes:
     """Fetches a Cloudflare-protected endpoint with a browser fingerprint, raising typed."""
+    proxies = {"http": proxy, "https": proxy} if proxy else None
     try:
-        response = requests.get(url, impersonate="chrome", timeout=30)
+        response = requests.get(url, impersonate="chrome", timeout=30, proxies=proxies)
     except Exception as exc:  # curl_cffi network errors are connect/read timeouts
-        raise FetchError(None, f"{url} -> {exc}") from exc
+        raise FetchError(None, f"{url} -> {exc}", via_proxy=proxy is not None) from exc
     if response.status_code != 200:
-        raise FetchError(response.status_code, f"{url} -> HTTP {response.status_code}")
+        raise FetchError(
+            response.status_code, f"{url} -> HTTP {response.status_code}", via_proxy=proxy is not None
+        )
     content: bytes = response.content
     return content
 
@@ -114,10 +118,12 @@ def run_id_for(spec: FeedSpec, trade_date: date) -> str:
     )
 
 
-def fetch_and_land(minio: Minio, spec: FeedSpec, trade_date: date) -> dict[str, Any]:
+def fetch_and_land(
+    minio: Minio, spec: FeedSpec, trade_date: date, *, proxy: str | None = None
+) -> dict[str, Any]:
     """Fetches one live feed and lands it in Bronze, raises FetchError on upstream failure."""
     url = spec.url.format(ymd=trade_date.strftime("%Y%m%d")) if spec.date_scoped else spec.url
-    raw = fetch(url)
+    raw = fetch(url, proxy=proxy if spec.needs_proxy else None)
     count = record_count(raw, spec.ext)
     return land_payloads(
         minio,

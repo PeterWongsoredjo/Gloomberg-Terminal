@@ -27,6 +27,12 @@ def test_fetch_gives_up_on_other_4xx() -> None:
     assert _retry(retry_on_transient_fetch, FetchError(401, "auth")) is False
 
 
+def test_fetch_gives_up_on_direct_403_but_retries_a_proxied_one() -> None:
+    """A bare 403 is a real block; a proxied 403 is just a bad IP draw worth retrying."""
+    assert _retry(retry_on_transient_fetch, FetchError(403, "blocked")) is False
+    assert _retry(retry_on_transient_fetch, FetchError(403, "blocked", via_proxy=True)) is True
+
+
 def test_fetch_does_not_retry_unrelated_errors() -> None:
     assert _retry(retry_on_transient_fetch, ValueError("bug")) is False
 

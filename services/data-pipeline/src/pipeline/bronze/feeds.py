@@ -21,6 +21,7 @@ class FeedSpec:
     is_universe: bool = False
     date_scoped: bool = False
     accumulates: bool = False
+    needs_proxy: bool = False
 
 
 # the four live-tested JSON feeds plus the curated news RSS feeds
@@ -31,21 +32,25 @@ FEEDS: dict[str, FeedSpec] = {
         url=IDX + "/TradingSummary/GetStockSummary?length=1000&date={ymd}",
         is_universe=True,
         date_scoped=True,
+        needs_proxy=True,
     ),
     "index_level": FeedSpec(
         source="idx_summary",
         dataset="index_level",
         url=IDX + "/TradingSummary/GetIndexSummary",
+        needs_proxy=True,
     ),
     "corporate_actions": FeedSpec(
         source="corporate_actions",
         dataset="issued_history",
         url=IDX + "/ListingActivity/GetIssuedHistory?caType=&dateFrom=&dateTo=&start=0&length=9999",
+        needs_proxy=True,
     ),
     "company_profile": FeedSpec(
         source="company_profile",
         dataset="profiles",
         url=IDX + "/ListedCompany/GetCompanyProfiles?kodeEmiten=&emitenType=s&start=0&length=9999",
+        needs_proxy=True,
     ),
     "news_cnbc": FeedSpec(
         source="news_rss",

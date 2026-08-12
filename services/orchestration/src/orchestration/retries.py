@@ -41,8 +41,10 @@ def _failed_exception(state: State) -> BaseException | None:
 
 
 def _is_transient_fetch(exc: FetchError) -> bool:
-    """A fetch is transient on a timeout (no status), a 429, or any 5xx."""
-    return exc.status_code is None or exc.status_code == 429 or exc.status_code >= 500
+    """Transient on a timeout, a 429, any 5xx, or a proxied 403 (retry draws a fresh IP)."""
+    if exc.status_code is None or exc.status_code == 429 or exc.status_code >= 500:
+        return True
+    return exc.status_code == 403 and exc.via_proxy
 
 
 def retry_on_transient_fetch(task: Task[Any, Any], task_run: TaskRun, state: State) -> bool:
