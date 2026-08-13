@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Radio } from "lucide-react";
 
 import { fmtWibDateTime } from "@/lib/format";
@@ -48,7 +49,14 @@ export function SessionHeader({ selectedTicker, onSelectTicker, marketState, ihs
   return (
     <header className="flex h-[5vh] min-h-9 items-center justify-between border-b border-zinc-800 bg-[#0a0a0a] px-2">
       <div className="flex items-center gap-2">
-        <span className="text-[#00FF66]">GLOOMBERG</span>
+        <Image
+          src="/pw-squared.png"
+          alt="Gloomberg Terminal"
+          width={20}
+          height={20}
+          loading="eager"
+          className="h-5 w-5 shrink-0"
+        />
         <div className="flex items-center border border-zinc-700 bg-black px-2 py-0.5 focus-within:border-[#00FF66]">
           <span className="text-[#00FF66]">{"> "}</span>
           <input

@@ -1,11 +1,15 @@
 "use client";
 
+import { useMemo, useState } from "react";
+
+import { useUniverse } from "@/lib/api/hooks";
 import { fmtIdrScale, fmtInt, fmtPct, fmtWibTime } from "@/lib/format";
 import { signClass } from "@/lib/palette";
 import type { LiveTapeRow } from "@/lib/types/api";
 import type { StreamStatus } from "@/lib/stream/tape-stream";
 
-import { PanelStatus } from "./panel-status";
+import { PanelStatus, type PanelStatusProps } from "./panel-status";
+import { TapeScopeSelect, type TapeScope } from "./tape-scope";
 
 /* The live tape watchlist, stream first, REST snapshot as fallback. */
 
@@ -46,16 +50,62 @@ function limitBadge(row: LiveTapeRow) {
   return <span className={`ml-1 px-1 text-black ${cls}`}>{row.at_price_limit}</span>;
 }
 
+interface EmptyInput {
+  loading: boolean;
+  tapeRows: number;
+  visibleRows: number;
+  curatedSize: number;
+  universeLoading: boolean;
+}
+
+/** Why the list is empty, or null when there are rows to draw. */
+function emptyStatus(input: EmptyInput): PanelStatusProps | null {
+  if (input.visibleRows > 0) return null;
+  if (input.loading) return { state: "LOADING" };
+  if (input.tapeRows === 0) {
+    return { state: "EMPTY", message: "Tape projection is empty. Waiting for the pipeline." };
+  }
+  // rows exist but none survived, so the scope is the universe
+  if (input.universeLoading) return { state: "LOADING" };
+  if (input.curatedSize === 0) {
+    return { state: "ERROR", message: "Curated universe unreadable. Switch to ALL for the full tape." };
+  }
+  return { state: "EMPTY", message: "No curated ticker has a row on this tape yet." };
+}
+
 export function LiveTape({ rows, loading, streamStatus, asOf, selectedTicker, onSelectTicker }: LiveTapeProps) {
+  const [scope, setScope] = useState<TapeScope>("UNIVERSE");
+  const universe = useUniverse();
+
+  const curated = useMemo(
+    () => new Set(universe.data?.data.tickers ?? []),
+    [universe.data],
+  );
+  const curatedRows = useMemo(() => rows.filter((r) => curated.has(r.ticker)), [rows, curated]);
+  const visible = scope === "ALL" ? rows : curatedRows;
+
   const status = STATUS_LABEL[streamStatus];
-  const advancing = rows.filter((r) => (r.change_pct ?? 0) > 0).length;
-  const declining = rows.filter((r) => (r.change_pct ?? 0) < 0).length;
-  const unchanged = rows.length - advancing - declining;
+  const advancing = visible.filter((r) => (r.change_pct ?? 0) > 0).length;
+  const declining = visible.filter((r) => (r.change_pct ?? 0) < 0).length;
+  const unchanged = visible.length - advancing - declining;
+  const empty = emptyStatus({
+    loading: loading && rows.length === 0,
+    tapeRows: rows.length,
+    visibleRows: visible.length,
+    curatedSize: curated.size,
+    universeLoading: universe.isPending,
+  });
 
   return (
     <section className="flex min-h-0 flex-col border-r border-zinc-800">
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-[#121212] px-2 py-1 text-zinc-400">
-        <span className="tracking-widest">LIVE TAPE / WATCHLIST</span>
+      <div className="flex items-center justify-between gap-1 border-b border-zinc-800 bg-[#121212] px-2 py-1 text-zinc-400">
+        <span className="min-w-0 truncate tracking-widest">LIVE TAPE / WATCHLIST</span>
+        <TapeScopeSelect
+          value={scope}
+          onChange={setScope}
+          allCount={rows.length}
+          universeCount={curatedRows.length}
+        />
         <span className={status.className}>{status.text}</span>
       </div>
 
@@ -67,11 +117,8 @@ export function LiveTape({ rows, loading, streamStatus, asOf, selectedTicker, on
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        {loading && rows.length === 0 && <PanelStatus state="LOADING" />}
-        {!loading && rows.length === 0 && (
-          <PanelStatus state="EMPTY" message="Tape projection is empty. Waiting for the pipeline." />
-        )}
-        {rows.map((row, i) => {
+        {empty && <PanelStatus state={empty.state} message={empty.message} />}
+        {visible.map((row, i) => {
           const activeRow = row.ticker === selectedTicker;
           return (
             <button

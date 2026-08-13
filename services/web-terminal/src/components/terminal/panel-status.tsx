@@ -2,7 +2,7 @@ import { AlertTriangle } from "lucide-react";
 
 /* The shared loading, empty, and error faces every panel resolves to. */
 
-interface PanelStatusProps {
+export interface PanelStatusProps {
   state: "LOADING" | "EMPTY" | "ERROR";
   message?: string;
 }

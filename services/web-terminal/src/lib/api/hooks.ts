@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery, type Query } from "@tanstack/react-query";
 
 import { ApiError, fetchEnvelope } from "@/lib/api/client";
 import type {
+  CuratedUniverse,
   DataTelemetry,
   InsightPanelData,
   LiveTapePage,
@@ -41,6 +42,15 @@ export function useTapeSnapshot() {
     queryKey: ["tape"],
     queryFn: () => fetchEnvelope<LiveTapePage>("/tape"),
     refetchInterval: sessionAwareInterval<LiveTapePage>(60_000, 300_000),
+  });
+}
+
+/** The curated tickers the tape can narrow to, a config file that barely moves. */
+export function useUniverse() {
+  return useQuery({
+    queryKey: ["universe"],
+    queryFn: () => fetchEnvelope<CuratedUniverse>("/universe"),
+    refetchInterval: 600_000,
   });
 }
 

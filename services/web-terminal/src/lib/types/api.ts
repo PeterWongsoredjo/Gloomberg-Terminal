@@ -45,6 +45,11 @@ export interface LiveTapePage {
   rows: LiveTapeRow[];
 }
 
+/** The hand-picked tickers, empty when the curated file could not be read. */
+export interface CuratedUniverse {
+  tickers: string[];
+}
+
 export interface NewsSentimentProvenance {
   artifact_id: string;
   run_id: string | null;

@@ -80,6 +80,15 @@ class LiveTapePage(_Model):
     rows: list[LiveTapeRow]
 
 
+# --- curated universe ---
+
+
+class CuratedUniverse(_Model):
+    """The hand-picked tickers, in file order, empty when the file is unusable."""
+
+    tickers: list[str]
+
+
 # --- securities universe ---
 
 
