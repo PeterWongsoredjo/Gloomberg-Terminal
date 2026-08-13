@@ -7,9 +7,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-import zstandard
 from minio import Minio
 
+from pipeline.bronze.ingest import read_object
 from pipeline.config import BRONZE_BUCKET
 from pipeline.reference.securities import Security, load_baseline, securities_from_profiles
 from pipeline.reference.store import write
@@ -41,12 +41,7 @@ def _newest_payload(minio: Minio) -> bytes | None:
     ]
     if not keys:
         return None
-    response = minio.get_object(BRONZE_BUCKET, max(keys))
-    try:
-        return zstandard.ZstdDecompressor().decompress(response.read())
-    finally:
-        response.close()
-        response.release_conn()
+    return read_object(minio, max(keys))
 
 
 def _from_bronze(minio: Minio) -> tuple[list[Security], str]:

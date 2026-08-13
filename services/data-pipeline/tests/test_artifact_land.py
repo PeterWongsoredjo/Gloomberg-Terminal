@@ -21,11 +21,12 @@ def test_land_artifacts_skips_types_with_zero_rows(monkeypatch: pytest.MonkeyPat
         artifact_land, "_read_ledger", lambda settings, td: [_artifact("SENTIMENT")]
     )
     landed: list[dict[str, Any]] = []
-    monkeypatch.setattr(
-        artifact_land,
-        "land_payloads",
-        lambda minio, **kwargs: landed.append(kwargs) or {"dataset": kwargs["dataset"]},
-    )
+
+    def fake_land(minio: Any, **kwargs: Any) -> dict[str, Any]:
+        landed.append(kwargs)
+        return {"dataset": kwargs["dataset"]}
+
+    monkeypatch.setattr(artifact_land, "land_payloads", fake_land)
 
     manifests = land_artifacts(cast(Any, None), date(2026, 7, 3), cast(Any, object()))
 

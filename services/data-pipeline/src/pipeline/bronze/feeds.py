@@ -22,9 +22,11 @@ class FeedSpec:
     date_scoped: bool = False
     accumulates: bool = False
     needs_proxy: bool = False
+    # how many days back the url window starts, so a missed day self heals
+    lookback_days: int = 0
 
 
-# the four live-tested JSON feeds plus the curated news RSS feeds
+# the five live-tested JSON feeds plus the curated news RSS feeds
 FEEDS: dict[str, FeedSpec] = {
     "daily_trade": FeedSpec(
         source="idx_summary",
@@ -51,6 +53,16 @@ FEEDS: dict[str, FeedSpec] = {
         dataset="profiles",
         url=IDX + "/ListedCompany/GetCompanyProfiles?kodeEmiten=&emitenType=s&start=0&length=9999",
         needs_proxy=True,
+    ),
+    "dividend_announcements": FeedSpec(
+        source="corporate_actions",
+        dataset="dividend_announcements",
+        # dividen is a substring of dividend, so it catches both languages
+        url=IDX + "/ListedCompany/GetAnnouncement?kodeEmiten=&emitenType=s&indexFrom=0"
+                  "&pageSize=100&dateFrom={ymd_from}&dateTo={ymd}&lang=en&keyword=dividen",
+        date_scoped=True,
+        needs_proxy=True,
+        lookback_days=7,
     ),
     "news_cnbc": FeedSpec(
         source="news_rss",

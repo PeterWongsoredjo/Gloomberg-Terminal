@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import zstandard
@@ -29,6 +29,14 @@ class FetchError(RuntimeError):
         super().__init__(message)
 
 
+def is_transient_fetch(exc: FetchError) -> bool:
+    """A fetch is worth retrying on a timeout, a 429, any 5xx, or a proxied 403."""
+    if exc.status_code is None or exc.status_code == 429 or exc.status_code >= 500:
+        return True
+    # a proxied 403 is a bad ip draw, the next attempt gets a fresh one
+    return exc.status_code == 403 and exc.via_proxy
+
+
 def client(settings: Settings) -> Minio:
     return Minio(
         settings.minio_endpoint,
@@ -44,11 +52,20 @@ def _put(minio: Minio, key: str, data: bytes, content_type: str) -> None:
     )
 
 
+def read_object(minio: Minio, key: str) -> bytes:
+    """Reads one Bronze object back and decompresses it."""
+    response = minio.get_object(BRONZE_BUCKET, key)
+    try:
+        return bytes(zstandard.ZstdDecompressor().decompress(response.read()))
+    finally:
+        response.close()
+        response.release_conn()
+
+
 def fetch(url: str, *, proxy: str | None = None) -> bytes:
     """Fetches a Cloudflare-protected endpoint with a browser fingerprint, raising typed."""
-    proxies = {"http": proxy, "https": proxy} if proxy else None
     try:
-        response = requests.get(url, impersonate="chrome", timeout=30, proxies=proxies)
+        response = requests.get(url, impersonate="chrome", timeout=30, proxy=proxy)
     except Exception as exc:  # curl_cffi network errors are connect/read timeouts
         raise FetchError(None, f"{url} -> {exc}", via_proxy=proxy is not None) from exc
     if response.status_code != 200:
@@ -57,6 +74,16 @@ def fetch(url: str, *, proxy: str | None = None) -> bytes:
         )
     content: bytes = response.content
     return content
+
+
+def url_for(spec: FeedSpec, trade_date: date) -> str:
+    """The feed's url for one date, with its date window filled in."""
+    if not spec.date_scoped:
+        return spec.url
+    window_start = trade_date - timedelta(days=spec.lookback_days)
+    return spec.url.format(
+        ymd=trade_date.strftime("%Y%m%d"), ymd_from=window_start.strftime("%Y%m%d")
+    )
 
 
 def record_count(raw: bytes, ext: str) -> int:
@@ -86,6 +113,8 @@ def land_payloads(
     missing_tickers: list[str],
     requested_at: datetime,
     ext: str = "json",
+    status: str | None = None,
+    notes: str = "",
 ) -> dict[str, Any]:
     compressor = zstandard.ZstdCompressor()
     for seq, raw in enumerate(payloads):
@@ -103,6 +132,8 @@ def land_payloads(
         expected_universe=expected_universe,
         missing_tickers=missing_tickers,
         requested_at=requested_at,
+        status=status,
+        notes=notes,
     )
     mkey = paths.manifest_key(source, dataset, trade_date, ingest_run_id)
     _put(minio, mkey, json.dumps(manifest, indent=2).encode(), "application/json")
@@ -122,8 +153,7 @@ def fetch_and_land(
     minio: Minio, spec: FeedSpec, trade_date: date, *, proxy: str | None = None
 ) -> dict[str, Any]:
     """Fetches one live feed and lands it in Bronze, raises FetchError on upstream failure."""
-    url = spec.url.format(ymd=trade_date.strftime("%Y%m%d")) if spec.date_scoped else spec.url
-    raw = fetch(url, proxy=proxy if spec.needs_proxy else None)
+    raw = fetch(url_for(spec, trade_date), proxy=proxy if spec.needs_proxy else None)
     count = record_count(raw, spec.ext)
     return land_payloads(
         minio,

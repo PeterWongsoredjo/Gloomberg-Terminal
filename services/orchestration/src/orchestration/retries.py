@@ -13,7 +13,7 @@ from prefect import Task
 from prefect.client.schemas.objects import State, TaskRun
 from prefect.tasks import exponential_backoff
 
-from pipeline.bronze.ingest import FetchError
+from pipeline.bronze.ingest import FetchError, is_transient_fetch
 
 from orchestration.errors import DbtTransientError, TriggerTransientError
 
@@ -40,16 +40,9 @@ def _failed_exception(state: State) -> BaseException | None:
     return result if isinstance(result, BaseException) else None
 
 
-def _is_transient_fetch(exc: FetchError) -> bool:
-    """Transient on a timeout, a 429, any 5xx, or a proxied 403 (retry draws a fresh IP)."""
-    if exc.status_code is None or exc.status_code == 429 or exc.status_code >= 500:
-        return True
-    return exc.status_code == 403 and exc.via_proxy
-
-
 def retry_on_transient_fetch(task: Task[Any, Any], task_run: TaskRun, state: State) -> bool:
     exc = _failed_exception(state)
-    return isinstance(exc, FetchError) and _is_transient_fetch(exc)
+    return isinstance(exc, FetchError) and is_transient_fetch(exc)
 
 
 def retry_on_transient_dbt(task: Task[Any, Any], task_run: TaskRun, state: State) -> bool:

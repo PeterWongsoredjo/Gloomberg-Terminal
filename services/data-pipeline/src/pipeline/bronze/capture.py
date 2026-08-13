@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from pipeline.bronze.feeds import FEEDS, EOD_FEEDS, FeedSpec
-from pipeline.bronze.ingest import fetch, record_count
+from pipeline.bronze.ingest import fetch, record_count, url_for
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "frozen"
 
@@ -35,8 +35,7 @@ def capture(trade_date: date) -> None:
     """Captures every JSON EOD feed for one trade_date into the frozen fixtures tree."""
     for name in EOD_FEEDS:
         spec = FEEDS[name]
-        url = spec.url.format(ymd=trade_date.strftime("%Y%m%d")) if spec.date_scoped else spec.url
-        raw = fetch(url)
+        raw = fetch(url_for(spec, trade_date))
         _write(spec, trade_date, raw)
         print(f"captured {name}: {len(raw)} bytes, {record_count(raw, spec.ext)} records")
 

@@ -12,11 +12,10 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 from xml.etree import ElementTree
 
-import zstandard
 from minio import Minio
 
 from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import client, land_payloads
+from pipeline.bronze.ingest import client, land_payloads, read_object
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import BRONZE_BUCKET, Settings, get_settings
 from pipeline.reference.matcher import Registry
@@ -92,7 +91,6 @@ def tag_items(items: list[dict[str, Any]], registry: Registry) -> list[dict[str,
 
 
 def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
-    decompressor = zstandard.ZstdDecompressor()
     prefix = "news_rss/"
     out = []
     for obj in minio.list_objects(BRONZE_BUCKET, prefix=prefix, recursive=True):
@@ -102,12 +100,7 @@ def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
         dataset = name.split("/")[1]
         if dataset not in _ACTIVE_DATASETS:
             continue
-        response = minio.get_object(BRONZE_BUCKET, name)
-        try:
-            out.append((dataset, decompressor.decompress(response.read())))
-        finally:
-            response.close()
-            response.release_conn()
+        out.append((dataset, read_object(minio, name)))
     return out
 
 

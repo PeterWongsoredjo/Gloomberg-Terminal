@@ -27,6 +27,7 @@ from orchestration.phases import rollup, run_phase
 from orchestration.results import PhaseResult
 from orchestration.tasks.coverage import coverage_gate
 from orchestration.tasks.dbt_build import INSIGHT_PHASES, dbt_build
+from orchestration.tasks.documents import land_dividend_attachments
 from orchestration.tasks.finalize import finalize_run
 from orchestration.tasks.gold_sources import land_agent_artifacts, normalize_news
 from orchestration.tasks.guard import guard_trading_day
@@ -194,12 +195,19 @@ def gloomberg_daily_flow(trade_date: str | None = None) -> str:
             lambda: project_corporate_actions(td), on_error=_degrade_on_projection_failure,
         )
 
+        # off the path to Gold, nothing in the warehouse reads these bytes yet
+        dividend_documents = run_phase(
+            dsn, flow_run_id, td, "land_dividend_attachments",
+            lambda: land_dividend_attachments(td), on_error=_degrade_on_landing_failure,
+        )
+
         # after promote, so it reads the closes the day settled on
         insight = _eod_insight_result(dsn, flow_run_id, td, config)
 
         overall = rollup(
             gate.status,
             corporate_actions.status,
+            dividend_documents.status,
             insight.status,
             *(landing.status for landing in landings),
         )
