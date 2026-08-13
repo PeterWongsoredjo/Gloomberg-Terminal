@@ -26,6 +26,7 @@ labelled as (
             when 'RIGHTS_ISSUE' then 'rights issue'
             when 'DELISTING' then 'delisting'
             when 'RELISTING' then 'relisting'
+            else lower(replace(event_type, '_', ' '))
         end as event_label,
         (shares_before > 0 and shares_after > 0 and shares_before <> shares_after) as shares_changed
     from windowed

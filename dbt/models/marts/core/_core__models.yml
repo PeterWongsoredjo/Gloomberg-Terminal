@@ -278,3 +278,63 @@ models:
         data_tests: [unique, not_null]
       - name: trade_date
         data_tests: [not_null]
+
+  - name: fct_cash_dividend
+    description: "Grain: one row per (filing_id, event_seq); a filed cash dividend. Never price-adjusting."
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "currency <> 'IDR' or amount_per_share_sen is not null"
+    columns:
+      - name: dividend_id
+        data_tests: [unique, not_null]
+      - name: ticker
+        data_tests: [not_null]
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [IDR, USD]
+      - name: dividend_kind
+        data_tests:
+          - accepted_values:
+              values: [INTERIM, FINAL, SPECIAL, UNSPECIFIED]
+      - name: amount_per_share_sen
+        description: "Rupiah cents, because IDX filings quote fractional rupiah."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+      - name: event_confidence
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+      - name: data_as_of
+        data_tests: [not_null]
+
+  - name: fct_cash_dividend_news
+    description: "Grain: one row per current dividend statement, shaped as a feed item."
+    columns:
+      - name: item_id
+        data_tests: [unique, not_null]
+      - name: dividend_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('fct_cash_dividend')
+              field: dividend_id
+      - name: trade_date
+        data_tests: [not_null]
+      - name: title
+        data_tests: [not_null]
+      - name: summary
+        data_tests: [not_null]
+      - name: published_at
+        data_tests: [not_null]
+      - name: source
+        data_tests:
+          - accepted_values:
+              values: [idx_dividend_filing]
+      - name: item_type
+        data_tests:
+          - accepted_values:
+              values: [CORPORATE_ACTION]
