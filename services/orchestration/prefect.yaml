@@ -36,6 +36,15 @@ deployments:
         anchor_date: "2026-01-01T09:05:00"
         timezone: "Asia/Jakarta"
 
+  - name: gloomberg-resweep
+    entrypoint: src/orchestration/flow_sweep.py:idx_resweep_flow
+    description: "Hourly retry of the day's blocked IDX fetches. The proxy blocks in stretches, so a later hour is an independent attempt; a day with nothing outstanding stops immediately."
+    work_pool:
+      name: gloomberg-local
+    schedules:
+      - cron: "0 18-23 * * 1-5"     # six independent windows after the 17:00 EOD run
+        timezone: "Asia/Jakarta"
+
   - name: gloomberg-backfill
     entrypoint: src/orchestration/flow_backfill.py:backfill_sentiment_flow
     description: "Overnight drain of the unscored article backlog across the retained window, oldest day first."
