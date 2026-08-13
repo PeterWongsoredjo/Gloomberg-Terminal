@@ -37,7 +37,21 @@ def _grounded(objective: str, draft: dict[str, Any]) -> bool:
         return set(value.get("evidence_item_ids", [])).issubset(set(draft["evidence_pool"]))
     if kind == "EXTRACTION":
         return all((e.get("source_span") or "").strip() for e in value.get("events", []))
+    if kind == "CASH_DIVIDEND":
+        return _dividend_grounded(draft)
     return True
+
+
+def _dividend_grounded(draft: dict[str, Any]) -> bool:
+    """A filing's dividends must quote it, and belong to the issuer that filed it."""
+    value = draft["value"]
+    if str(value.get("filing_id")) not in set(draft["evidence_pool"]):
+        return False
+    ticker = str((draft.get("subject") or {}).get("ticker") or "")
+    return all(
+        (e.get("source_span") or "").strip() and str(e.get("ticker")) == ticker
+        for e in value.get("events", [])
+    )
 
 
 def _primary_ticker(value: dict[str, Any]) -> str | None:
@@ -115,6 +129,9 @@ def _checks(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> di
 
 _HARD_GATES = ("schema_valid", "grounded", "entities_resolved", "non_advisory", "context_consistent")
 
+# objectives whose drafts stand alone, so a good one lands even if a sibling fails
+_PARTIAL_ACCEPT = ("ARTICLE_SENTIMENT", "CASH_DIVIDEND")
+
 
 def _passed(checks: dict[str, Any]) -> bool:
     return all(bool(checks[g]) for g in _HARD_GATES)
@@ -125,7 +142,8 @@ def _verdict(objective: str, graded: list[dict[str, Any]], can_retry: bool) -> s
     passed = [d for d in graded if d["passed"]]
     if len(passed) == len(graded):
         return "ACCEPT"
-    if spec_for(objective).artifact_type == "ARTICLE_SENTIMENT" and passed:
+    # one bad document must not force a paid retry of the good ones
+    if spec_for(objective).artifact_type in _PARTIAL_ACCEPT and passed:
         return "ACCEPT"
     return "OPTIMIZE" if can_retry else "REJECT"
 

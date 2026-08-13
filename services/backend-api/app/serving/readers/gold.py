@@ -93,6 +93,14 @@ class ServingGoldReader:
             "fct_corporate_action_news", "CORPORATE_ACTION", limit, before
         )
 
+    async def cash_dividend_news(
+        self, limit: int, before: tuple[datetime, str] | None
+    ) -> list[dict[str, Any]]:
+        """Filed dividends as feed items, read separately so a missing table costs only these."""
+        return await self._feed_page(
+            "fct_cash_dividend_news", "CORPORATE_ACTION", limit, before
+        )
+
     async def article_sentiment(self, item_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Each article's own verdict from Gold, for headlines past the intraday window."""
         if not item_ids:

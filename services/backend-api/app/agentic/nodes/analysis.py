@@ -55,6 +55,39 @@ def _batch_tasks(state: AgentState, batch_size: int, correction: list[str]) -> l
     return tasks
 
 
+def _filing_payload(filing: dict[str, Any], char_cap: int) -> dict[str, Any]:
+    """Only the fields the model needs to read one filing, its text capped."""
+    text = str(filing["body"])
+    return {
+        "filing_id": str(filing["filing_id"]),
+        "ticker": str(filing["ticker"]),
+        "title": filing.get("title"),
+        "filing_number": filing.get("filing_number"),
+        "announced_at": str(filing.get("announced_at") or ""),
+        "source_url": filing.get("source_url"),
+        "text": text[:char_cap],
+        "text_truncated": len(text) > char_cap,
+    }
+
+
+def _filing_tasks(
+    state: AgentState, settings: AgenticSettings, correction: list[str]
+) -> list[dict[str, Any]]:
+    """One task per filing, so a long document never shares a request with another."""
+    tasks = []
+    for filing in state["context"]["documents"][: settings.dividend_filings_per_run]:
+        payload = _filing_payload(filing, settings.dividend_filing_char_cap)
+        payload["correction"] = correction
+        tasks.append(
+            {
+                "subject": {"ticker": str(filing["ticker"]), "security_id": None},
+                "user": user_payload(payload),
+                "pool": [str(filing["filing_id"])],
+            }
+        )
+    return tasks
+
+
 def _item_tickers(chunk: list[dict[str, Any]]) -> dict[str, set[str]]:
     """The issuers each item already names on its own authority, keyed by item_id."""
     return {
@@ -80,13 +113,16 @@ def _tasks(state: AgentState, settings: AgenticSettings) -> list[dict[str, Any]]
     correction = (state["working"].get("evaluation") or {}).get("reasons", [])
     if objective == "article_sentiment":
         return _batch_tasks(state, settings.article_batch_size, correction)
+    if objective == "dividend_extraction":
+        return _filing_tasks(state, settings, correction)
     if objective == "deep_extraction":
+        capped = newest(context["news_items"], news_cap)
         payload = {
-            "documents": context["news_items"],
+            "documents": [_article_payload(i) for i in capped],
             "universe": state["subject_universe"],
             "correction": correction,
         }
-        pool = sorted(item_ids(context["news_items"]))
+        pool = sorted(item_ids(capped))
         return [{"subject": {"ticker": None, "security_id": None}, "user": user_payload(payload), "pool": pool}]
 
     tasks = []
