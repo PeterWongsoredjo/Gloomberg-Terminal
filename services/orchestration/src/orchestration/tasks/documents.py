@@ -8,6 +8,7 @@ from datetime import date
 
 from prefect import task
 
+from pipeline.bronze.dividend_text import land_filing_text
 from pipeline.bronze.dividends import PDF_DATASET, land_attachments
 from pipeline.bronze.ingest import client
 from pipeline.config import get_settings
@@ -34,4 +35,19 @@ def land_dividend_attachments(trade_date: date) -> PhaseResult:
         payload=manifests,
         notes=str(pdfs["notes"]),
         ingest_run_id=str(pdfs.get("ingest_run_id") or "") or None,
+    )
+
+
+@task(name="extract_dividend_filings", tags=["minio_fetch"])
+def extract_dividend_filings(trade_date: date) -> PhaseResult:
+    """Reads the landed dividend documents into text the extraction step can use."""
+    settings = get_settings()
+    manifest = land_filing_text(client(settings), trade_date)
+    if manifest is None:
+        return PhaseResult(status="SKIPPED", notes="no landed dividend documents")
+    return PhaseResult(
+        status=_STATUS.get(str(manifest["status"]), "DEGRADED"),
+        payload=manifest,
+        notes=str(manifest["notes"]),
+        ingest_run_id=str(manifest.get("ingest_run_id") or "") or None,
     )

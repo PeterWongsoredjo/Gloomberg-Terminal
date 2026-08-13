@@ -38,6 +38,13 @@ INSIGHT_PHASES: list[tuple[str, list[str]]] = [
     ("test", ["test", "--select", "fct_insight"]),
 ]
 
+# just the dividend lineage, for the pass after the filings are read
+DIVIDEND_PHASES: list[tuple[str, list[str]]] = [
+    ("staging", ["run", "--select", "stg_agent_artifact__cash_dividend"]),
+    ("marts_core", ["run", "--select", "fct_cash_dividend fct_cash_dividend_news"]),
+    ("test", ["test", "--select", "fct_cash_dividend fct_cash_dividend_news"]),
+]
+
 # stderr signatures that mean "retry once", not "a real error"
 _TRANSIENT_SIGNATURES = (
     "conflicting lock",

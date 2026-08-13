@@ -129,6 +129,18 @@ def trigger_eod_insight(
     return _launch_and_poll(config, config.eod_insight_objective, trade_date, tickers)
 
 
+@task(
+    name="trigger_dividend_extraction",
+    retries=TRIGGER_RETRIES,
+    retry_delay_seconds=TRIGGER_BACKOFF,
+    retry_jitter_factor=TRIGGER_JITTER,
+    retry_condition_fn=retry_on_transient_trigger,
+)
+def trigger_dividend_extraction(trade_date: date, config: OrchestrationConfig) -> PhaseResult:
+    """Reads the queued filings, which pick their own subjects from the queue."""
+    return _launch_and_poll(config, config.dividend_objective, trade_date, [])
+
+
 def _launch_and_poll(
     config: OrchestrationConfig, objective: str, trade_date: date, universe: list[str]
 ) -> PhaseResult:
