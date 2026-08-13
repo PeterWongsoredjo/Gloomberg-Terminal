@@ -64,5 +64,7 @@ def value_confidence(objective: str, value: dict[str, Any]) -> float:
         return float(value.get("self_confidence", 0.0))
     if kind == "INSIGHT":
         return float(value.get("confidence", 0.0))
+    if kind == "CASH_DIVIDEND":
+        return float(value.get("filing_confidence", 0.0))
     events = value.get("events") or []
     return min((float(e.get("confidence", 0.0)) for e in events), default=0.4)

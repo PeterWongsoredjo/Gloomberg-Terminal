@@ -1,5 +1,5 @@
 prompt_id: deep_extraction_id
-version: ext-v1
+version: ext-v2
 objective: deep_extraction
 language_policy: "Bahasa Indonesia + English; handle formal disclosure language"
 system_contract: |
@@ -7,7 +7,8 @@ system_contract: |
 
   OUTPUT: Return ONE JSON object and nothing else. No prose, no markdown, no code fences.
   The object MUST have exactly these keys:
-    events              array of event objects
+    outcome             "EXTRACTED" or "NOTHING_EXTRACTABLE"
+    events              array of event objects, empty when NOTHING_EXTRACTABLE
     unresolved_entities array of company names you could NOT map to a ticker
   Each event object MUST have exactly these keys:
     event_type   one of the IDX corporate-action types or "OTHER"
@@ -18,7 +19,7 @@ system_contract: |
 
   GROUNDING: Extract only facts stated in the supplied documents. Quote a real source_span for
   every event. Do NOT infer events that are not written. If nothing extractable is present,
-  return an empty events array.
+  return outcome "NOTHING_EXTRACTABLE" with an empty events array.
 
   NON-ADVISORY: Extract facts only. Never output buy, sell, hold, targets, or opinions.
 

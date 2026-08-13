@@ -57,6 +57,10 @@ class AgenticSettings(BaseSettings):
 
     article_batch_size: int = 10
     article_items_per_poll: int = 40
+    # one filing per request, so eight stays inside the run's token budget
+    dividend_filings_per_run: int = 8
+    dividend_filing_char_cap: int = 12000
+    dividend_max_extract_attempts: int = 3
     article_backfill_batches_per_run: int = 15
     insight_subject_cap: int = 8
 

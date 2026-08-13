@@ -19,6 +19,7 @@ _TYPE_TO_DATASET = {
     "ARTICLE_SENTIMENT": "article_sentiment",
     "INSIGHT": "insight",
     "EXTRACTION": "extraction",
+    "CASH_DIVIDEND": "cash_dividend",
 }
 
 

@@ -12,6 +12,7 @@ from app.agentic.schemas import (
     ArticleSentimentBatch,
     ArticleSentimentValue,
     ArtifactType,
+    CashDividendValue,
     ExtractionValue,
     InsightValue,
     SentimentValue,
@@ -44,6 +45,10 @@ OBJECTIVES: dict[str, ObjectiveSpec] = {
     ),
     "deep_extraction": ObjectiveSpec(
         "deep_extraction", "EXTRACTION", ExtractionValue, ("gemini", "groq"), "deep_extract", "extraction_confidence_gate"
+    ),
+    "dividend_extraction": ObjectiveSpec(
+        "dividend_extraction", "CASH_DIVIDEND", CashDividendValue, ("gemini", "groq"),
+        "deep_extract", "extraction_confidence_gate",
     ),
     "insight_synthesis": ObjectiveSpec(
         "insight_synthesis", "INSIGHT", InsightValue, ("groq", "gemini"), "synthesize_insight", "insight_confidence_gate"

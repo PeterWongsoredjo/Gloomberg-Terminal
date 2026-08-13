@@ -8,15 +8,22 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.agentic.amount import amount_sen
 from app.core.enums import QualityFlag
 
 SentimentLabel = Literal["BEARISH", "NEUTRAL", "BULLISH"]
-ArtifactType = Literal["SENTIMENT", "ARTICLE_SENTIMENT", "EXTRACTION", "SUMMARY", "INSIGHT"]
+ArtifactType = Literal[
+    "SENTIMENT", "ARTICLE_SENTIMENT", "EXTRACTION", "SUMMARY", "INSIGHT", "CASH_DIVIDEND"
+]
 Verdict = Literal["ACCEPT", "OPTIMIZE", "REJECT"]
 
 TickerRelevance = Literal["PRIMARY", "SECONDARY", "INCIDENTAL"]
+
+DividendKind = Literal["INTERIM", "FINAL", "SPECIAL", "UNSPECIFIED"]
+DividendOutcome = Literal["EXTRACTED", "NO_DIVIDEND_STATED"]
+ExtractionOutcome = Literal["EXTRACTED", "NOTHING_EXTRACTABLE"]
 
 # corporate-action enum plus the extraction escape hatch
 EventType = Literal[
@@ -91,8 +98,59 @@ class Event(_Strict):
 
 
 class ExtractionValue(_Strict):
+    outcome: ExtractionOutcome
     events: list[Event] = Field(default_factory=list)
     unresolved_entities: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _outcome_matches_events(self) -> ExtractionValue:
+        """An empty extraction must say so, never pass as a silent success."""
+        if self.outcome == "EXTRACTED" and not self.events:
+            raise ValueError("EXTRACTED needs at least one event")
+        if self.outcome == "NOTHING_EXTRACTABLE" and self.events:
+            raise ValueError("NOTHING_EXTRACTABLE cannot carry events")
+        return self
+
+
+class CashDividendEvent(_Strict):
+    """One declared cash dividend line, as the filing states it."""
+
+    ticker: str = Field(pattern=r"^[A-Z]{4}$")
+    dividend_kind: DividendKind
+    currency: Literal["IDR", "USD"]
+    amount_text: str = Field(min_length=1, max_length=40)
+    amount_per_share_sen: int | None = Field(default=None, ge=0)
+    ex_date: date | None = None
+    recording_date: date | None = None
+    payment_date: date | None = None
+    source_span: str = Field(min_length=1, max_length=200)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _derive_amount(self) -> CashDividendEvent:
+        """Our parser owns the number, so the model can never supply one."""
+        self.amount_per_share_sen = amount_sen(self.amount_text, self.currency)
+        return self
+
+
+class CashDividendValue(_Strict):
+    """What one filing yielded: the dividends it declares, or a stated absence."""
+
+    filing_id: str = Field(min_length=1)
+    outcome: DividendOutcome
+    events: list[CashDividendEvent] = Field(default_factory=list, max_length=6)
+    reason: str = Field(default="", max_length=200)
+    unresolved: list[str] = Field(default_factory=list)
+    filing_confidence: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _outcome_matches_events(self) -> CashDividendValue:
+        """A filing that declares nothing has to say why, and claim no amounts."""
+        if self.outcome == "EXTRACTED" and not self.events:
+            raise ValueError("EXTRACTED needs at least one event")
+        if self.outcome == "NO_DIVIDEND_STATED" and (self.events or not self.reason.strip()):
+            raise ValueError("NO_DIVIDEND_STATED needs a reason and no events")
+        return self
 
 
 class InsightSignal(_Strict):
@@ -161,7 +219,7 @@ class Ct009Artifact(_Strict):
     artifact_type: ArtifactType
     subject: Subject
     window: Window
-    value: SentimentValue | ArticleSentimentValue | ExtractionValue | InsightValue
+    value: SentimentValue | ArticleSentimentValue | ExtractionValue | InsightValue | CashDividendValue
     confidence: float = Field(ge=0.0, le=1.0)
     provenance: Provenance
     quality_flags: list[QualityFlag] = Field(default_factory=list)

@@ -52,6 +52,30 @@ update intraday.news_item set score_status = 'UNSCOREABLE'
 drop index if exists intraday.news_item_unscored_idx;
 create index if not exists news_item_pending_idx
     on intraday.news_item (trade_date, published_at, item_id) where score_status = 'PENDING';
+
+create table if not exists intraday.dividend_filing (
+    filing_id text primary key,
+    trade_date date not null,
+    ticker text not null,
+    title text not null,
+    filing_number text not null,
+    source_url text not null,
+    announced_at timestamptz not null,
+    content_sha256 text not null,
+    body text not null,
+    char_count int not null,
+    ingest_run_id text,
+    first_seen_at timestamptz not null default now(),
+    extract_status text not null default 'PENDING',
+    extract_attempts int not null default 0,
+    last_attempt_run_id text,
+    extracted_at timestamptz,
+    extracted_run_id text
+);
+
+create index if not exists dividend_filing_pending_idx
+    on intraday.dividend_filing (trade_date, announced_at, filing_id)
+    where extract_status = 'PENDING';
 """
 
 _INSERT = """
@@ -79,9 +103,27 @@ select count(*) from intraday.news_item
 where trade_date = %s and score_status = 'PENDING'
 """
 
+_INSERT_FILING = """
+insert into intraday.dividend_filing
+    (filing_id, trade_date, ticker, title, filing_number, source_url,
+     announced_at, content_sha256, body, char_count, ingest_run_id)
+values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+on conflict (filing_id) do nothing
+returning filing_id
+"""
+
+_PENDING_FILINGS = """
+select count(*) from intraday.dividend_filing
+where trade_date = %s and extract_status = 'PENDING'
+"""
+
 _PRUNE_ITEMS = "delete from intraday.news_item where trade_date < %s"
 _PRUNE_SENTIMENT = "delete from intraday.sentiment where trade_date < %s"
 _PRUNE_INSIGHT = "delete from intraday.insight where trade_date < %s"
+_PRUNE_FILINGS = "delete from intraday.dividend_filing where trade_date < %s"
+
+# a dividend can pay out months after it is filed, so filings outlive articles
+FILING_KEEP_DAYS = 90
 
 
 @dataclass(frozen=True)
@@ -156,11 +198,51 @@ def pending_count(dsn: str, trade_date: date) -> int:
     return int(row[0]) if row else 0
 
 
+def upsert_filings(
+    dsn: str, filings: list[dict[str, Any]], trade_date: date, ingest_run_id: str | None
+) -> list[str]:
+    """Queues readable filings for extraction, returning only the ones never seen before."""
+    new_ids: list[str] = []
+    with psycopg.connect(dsn, connect_timeout=5) as conn:
+        conn.execute(_DDL)
+        with conn.transaction():
+            for filing in filings:
+                row = conn.execute(
+                    _INSERT_FILING,
+                    (
+                        str(filing["attachment_id"]),
+                        trade_date,
+                        str(filing["ticker"]),
+                        str(filing["title"]),
+                        str(filing["filing_number"]),
+                        str(filing["source_url"]),
+                        _published_at(filing["announced_at"]),
+                        str(filing["sha256"]),
+                        str(filing["text"]),
+                        int(filing["char_count"]),
+                        ingest_run_id,
+                    ),
+                ).fetchone()
+                if row is not None:
+                    new_ids.append(str(row[0]))
+    return new_ids
+
+
+def pending_filing_count(dsn: str, trade_date: date) -> int:
+    """How many of the day's filings still await extraction."""
+    with psycopg.connect(dsn, connect_timeout=5) as conn:
+        conn.execute(_DDL)
+        row = conn.execute(_PENDING_FILINGS, (trade_date,)).fetchone()
+    return int(row[0]) if row else 0
+
+
 def prune(dsn: str, today: date, keep_days: int = 14) -> None:
     """Drops projection rows older than the retention window."""
     floor = date.fromordinal(today.toordinal() - keep_days)
+    filing_floor = date.fromordinal(today.toordinal() - FILING_KEEP_DAYS)
     with psycopg.connect(dsn, connect_timeout=5, autocommit=True) as conn:
         conn.execute(_PRUNE_ITEMS, (floor,))
+        conn.execute(_PRUNE_FILINGS, (filing_floor,))
         for sql in (_PRUNE_SENTIMENT, _PRUNE_INSIGHT):
             try:
                 conn.execute(sql, (floor,))

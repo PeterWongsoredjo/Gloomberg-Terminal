@@ -11,6 +11,7 @@ Objective = Literal[
     "daily_sentiment",
     "article_sentiment",
     "deep_extraction",
+    "dividend_extraction",
     "insight_synthesis",
     "intraday_insight",
 ]
@@ -41,6 +42,8 @@ class Context(TypedDict):
     news_items: list[dict[str, Any]]
     market_context: list[dict[str, Any]]
     corporate_actions: list[dict[str, Any]]
+    # filings this run claimed, only ever populated for a document objective
+    documents: list[dict[str, Any]]
 
 
 class Working(TypedDict):

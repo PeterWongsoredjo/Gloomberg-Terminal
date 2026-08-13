@@ -31,6 +31,7 @@ class OrchestrationConfig:
     intraday_objective: str = "article_sentiment"
     intraday_insight_objective: str = "intraday_insight"
     eod_insight_objective: str = "insight_synthesis"
+    dividend_objective: str = "dividend_extraction"
     insight_subject_cap: int = 8
     eod_insight_subject_cap: int = 12
     universe_file: Path = DEFAULT_UNIVERSE_FILE
@@ -72,6 +73,9 @@ def get_config() -> OrchestrationConfig:
         ),
         eod_insight_objective=os.environ.get(
             "GLOOMBERG_ORCH_EOD_INSIGHT_OBJECTIVE", "insight_synthesis"
+        ),
+        dividend_objective=os.environ.get(
+            "GLOOMBERG_ORCH_DIVIDEND_OBJECTIVE", "dividend_extraction"
         ),
         insight_subject_cap=int(os.environ.get("GLOOMBERG_ORCH_INSIGHT_SUBJECT_CAP", "8")),
         eod_insight_subject_cap=int(os.environ.get("GLOOMBERG_ORCH_EOD_INSIGHT_SUBJECT_CAP", "12")),

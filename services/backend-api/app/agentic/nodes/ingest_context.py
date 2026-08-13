@@ -22,6 +22,8 @@ async def _news_for(
     deps: GraphDeps, gold: GoldReader, state: AgentState, objective: str, trade_date: str
 ) -> list[dict[str, Any]]:
     """Insight and scoring objectives read the poll projection, everything else reads Gold."""
+    if objective in intraday.NO_NEWS:
+        return []
     if objective not in intraday.POLLED_NEWS:
         return await gold.news_items(trade_date)
     if deps.pg_pool is None:
@@ -33,6 +35,21 @@ async def _news_for(
         trade_date,
         deps.settings.intraday_max_score_attempts,
         deps.settings.article_items_per_poll,
+        state["run_id"],
+    )
+
+
+async def _documents_for(
+    deps: GraphDeps, state: AgentState, objective: str, trade_date: str
+) -> list[dict[str, Any]]:
+    """Filings this run claimed, empty for every objective that reads no documents."""
+    if objective != "dividend_extraction" or deps.pg_pool is None:
+        return []
+    return await intraday.claim_unextracted_filings(
+        deps.pg_pool,
+        trade_date,
+        deps.settings.dividend_max_extract_attempts,
+        deps.settings.dividend_filings_per_run,
         state["run_id"],
     )
 
@@ -71,9 +88,10 @@ async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str,
     trade_date = state["trade_date"]
 
     async with deps.tracer.span("ingest_context", state["run_id"], {"objective": objective}):
-        resolver, news = await asyncio.gather(
+        resolver, news, documents = await asyncio.gather(
             EntityResolver.from_registry(deps.pg_pool, gold),
             _news_for(deps, gold, state, objective, trade_date),
+            _documents_for(deps, state, objective, trade_date),
         )
         known = resolver.resolve(state["subject_universe"]).resolved
         market_date = trade_date
@@ -84,7 +102,12 @@ async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str,
             deps, gold, objective, known, market_date, trade_date
         )
 
-    context = {"news_items": news, "market_context": market, "corporate_actions": corporate_actions}
+    context = {
+        "news_items": news,
+        "market_context": market,
+        "corporate_actions": corporate_actions,
+        "documents": documents,
+    }
     prompt = get_prompt(objective)
     primary = deps.ladder_for(objective).primary_name
     cache_key = cache.compute_key(
@@ -93,7 +116,7 @@ async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str,
         provider=primary,
         subject_universe=known,
         trade_date=trade_date,
-        news_fingerprint=cache.fingerprint(news),
+        news_fingerprint=cache.fingerprint([*news, *documents]),
         market_fingerprint=cache.fingerprint(market),
     )
     return {
@@ -105,7 +128,8 @@ async def ingest_context(state: AgentState, config: RunnableConfig) -> dict[str,
             "active_provider": primary,
             "prompt_version": prompt.version,
             "cache_key": cache_key,
-            "nothing_to_do": objective == "article_sentiment" and not news,
+            "nothing_to_do": (objective == "article_sentiment" and not news)
+            or (objective == "dividend_extraction" and not documents),
         },
         "status": "RUNNING",
     }

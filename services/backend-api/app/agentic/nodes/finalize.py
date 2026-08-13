@@ -24,6 +24,7 @@ from app.agentic.objectives import spec_for_type
 from app.agentic.schemas import (
     ArticleSentimentValue,
     Ct009Artifact,
+    CashDividendValue,
     ExtractionValue,
     InsightValue,
     Provenance,
@@ -65,6 +66,8 @@ async def _project_intraday(
         if objective == "article_sentiment":
             await intraday.project_article_sentiment(deps.pg_pool, state, artifacts, batch_ids)
             await _roll_up_tickers(deps.pg_pool, state)
+        elif objective == "dividend_extraction":
+            await intraday.project_cash_dividend(deps.pg_pool, state, artifacts)
         elif objective in intraday.INSIGHT_PROJECTED:
             await intraday.project_insight(deps.pg_pool, state, artifacts)
     except asyncpg.PostgresError:
@@ -74,7 +77,7 @@ async def _project_intraday(
 def _build_artifact(draft: dict[str, Any], state: AgentState, settings: AgenticSettings) -> Ct009Artifact:
     spec = spec_for_type(draft["artifact_type"])
     value = cast(
-        SentimentValue | ArticleSentimentValue | ExtractionValue | InsightValue,
+        SentimentValue | ArticleSentimentValue | ExtractionValue | InsightValue | CashDividendValue,
         spec.value_model.model_validate(draft["value"]),
     )
     confidence = value_confidence(spec.objective, draft["value"])
