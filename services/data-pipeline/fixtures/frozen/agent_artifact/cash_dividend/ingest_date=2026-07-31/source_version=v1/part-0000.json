@@ -1,0 +1,38 @@
+[
+  {
+    "artifact_id": "01KZV0CASHDIV0000000000001",
+    "run_id": "01KZV0RUNDIV00000000000001",
+    "artifact_type": "CASH_DIVIDEND",
+    "security_id": null,
+    "ticker": "SMDR",
+    "window_from": "2026-07-31",
+    "window_to": "2026-07-31",
+    "value": {
+      "filing_id": "SMDR:126abc4dc84495d6",
+      "outcome": "EXTRACTED",
+      "reason": "",
+      "events": [
+        {
+          "ticker": "SMDR",
+          "dividend_kind": "INTERIM",
+          "currency": "IDR",
+          "amount_text": "Rp2,5",
+          "amount_per_share_sen": 250,
+          "ex_date": null,
+          "recording_date": null,
+          "payment_date": null,
+          "source_span": "dividen tunai sebesar Rp2,5 (dua koma lima Rupiah) per saham",
+          "confidence": 0.93
+        }
+      ],
+      "unresolved": [],
+      "filing_confidence": 0.93
+    },
+    "confidence": 0.93,
+    "quality_flags": [],
+    "provider": "gemini",
+    "model": "gemini-3.1-flash-lite",
+    "prompt_version": "div-ext-v1",
+    "generated_at": "2026-07-31T12:00:00+00:00"
+  }
+]

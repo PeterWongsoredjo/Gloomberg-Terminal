@@ -11,6 +11,7 @@ dependencies = [
     "python-ulid>=2.7", # ingest_run_id / event_id
     "psycopg[binary]>=3.2",
     "pytz>=2026.2",
+    "pypdf>=5.1", # reads the text out of filed dividend PDFs
 ]
 
 [project.optional-dependencies]

@@ -119,6 +119,27 @@ def read_list_payload(minio: Minio, trade_date: date) -> bytes | None:
         return None
 
 
+def read_index(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
+    """The day's attachment index, empty when the pdf stage never ran."""
+    spec = FEEDS[LIST_FEED]
+    key = paths.object_key(
+        spec.source,
+        INDEX_DATASET,
+        trade_date,
+        spec.source_version,
+        deterministic_run_id(
+            idempotency_key(spec.source, INDEX_DATASET, trade_date, spec.source_version)
+        ),
+        0,
+        "json",
+    )
+    try:
+        rows: list[dict[str, Any]] = json.loads(read_object(minio, key))
+    except S3Error:
+        return []
+    return rows
+
+
 def _fetch_pdf(url: str, *, proxy: str | None) -> bytes:
     """Retries a blocked download, because the next attempt gets a different ip."""
     for _ in range(PDF_ATTEMPTS - 1):
