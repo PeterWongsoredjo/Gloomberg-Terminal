@@ -24,7 +24,7 @@ models:
                 severity: warn
 
   - name: stg_news_rss
-    description: "Normalized news items, one row per article."
+    description: "Parsed news items, one row per article. Carries no issuer tags; Bronze holds what the publisher sent."
     columns:
       - name: item_id
         data_tests: [not_null]

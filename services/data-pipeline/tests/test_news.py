@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import TYPE_CHECKING, cast
 
@@ -37,20 +38,19 @@ _RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def test_parse_rss_extracts_items_and_code_candidates() -> None:
-    """Two items parse and carry raw code candidates, but claim no resolved tickers."""
+def test_parse_rss_extracts_items_and_claims_no_issuer() -> None:
+    """Two items parse, and the parser names no issuer at all."""
     items = parse_rss(_RSS, "cnbc_market")
     assert len(items) == 2
     first = items[0]
     assert first["source"] == "cnbc_market"
-    assert "BBCA" in first["candidate_tickers"]
-    assert "IHSG" in first["candidate_tickers"]
-    assert "tickers" not in first  # resolution is the registry's job, not the parser's
     assert first["published_at"].endswith("+00:00")
+    assert "tickers" not in first  # deciding the issuer is the registry's job
+    assert "candidate_tickers" not in first
 
 
-def test_parse_rss_candidates_are_unfiltered() -> None:
-    """The parser makes no correctness claim, so jargon still shows up as a candidate."""
+def test_parse_rss_never_names_an_issuer_even_when_a_code_is_present() -> None:
+    """A headline full of four-letter jargon still yields no ticker guess."""
     rss = b"""<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0"><channel><item>
       <title>LQ45 turun jelang RUPS emiten</title>
@@ -58,7 +58,8 @@ def test_parse_rss_candidates_are_unfiltered() -> None:
       <link>https://example.com/lq45</link>
       <pubDate>Fri, 03 Jul 2026 09:15:00 +0700</pubDate>
     </item></channel></rss>"""
-    assert parse_rss(rss, "cnbc_market")[0]["candidate_tickers"] == ["RUPS"]
+    item = parse_rss(rss, "cnbc_market")[0]
+    assert not any(key.endswith("tickers") for key in item)
 
 
 def test_tag_items_resolves_against_the_registry() -> None:
@@ -100,3 +101,17 @@ def test_day_items_dedups_across_payloads(monkeypatch: pytest.MonkeyPatch) -> No
     items = day_items(cast("Minio", None), date(2026, 7, 3))
     ids = [i["item_id"] for i in items]
     assert len(ids) == 2 and ids == sorted(ids) and len(set(ids)) == 2
+
+
+def test_landed_news_carries_no_issuer_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """What reaches Bronze is what the publisher sent, never what we concluded."""
+    landed: dict[str, object] = {}
+    monkeypatch.setattr(news, "_read_raw", lambda minio, td: [("cnbc_market", _RSS)])
+    monkeypatch.setattr(
+        news,
+        "land_payloads",
+        lambda minio, **kwargs: landed.update(kwargs) or {"record_count": kwargs["record_count"]},
+    )
+    news.normalize_from_bronze(cast("Minio", None), date(2026, 7, 3))
+    items = json.loads(cast(list, landed["payloads"])[0])
+    assert items and all(not key.endswith("tickers") for item in items for key in item)

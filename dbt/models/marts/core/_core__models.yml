@@ -278,6 +278,9 @@ models:
         data_tests: [unique, not_null]
       - name: trade_date
         data_tests: [not_null]
+      - name: tickers
+        description: "Issuers from the newest scored verdict, empty until the article is scored. Never the matcher's pre-scoring guess."
+        data_tests: [not_null]
 
   - name: fct_cash_dividend
     description: "Grain: one row per (filing_id, event_seq); a filed cash dividend. Never price-adjusting."

@@ -18,9 +18,9 @@ from orchestration.results import PhaseResult
 
 @task(name="normalize_news")
 def normalize_news(trade_date: date) -> PhaseResult:
-    """Lands the day's tagged articles where the Gold news models can read them."""
+    """Lands the day's parsed articles where the Gold news models can read them."""
     settings = get_settings()
-    manifest = normalize_from_bronze(client(settings), trade_date, settings)
+    manifest = normalize_from_bronze(client(settings), trade_date)
     return PhaseResult(
         status="SUCCESS",
         payload=manifest,

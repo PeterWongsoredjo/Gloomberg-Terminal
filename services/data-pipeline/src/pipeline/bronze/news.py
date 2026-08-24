@@ -1,12 +1,14 @@
 """
 Normalizes raw RSS news into the JSON news items the sentiment flow reads.
+
+Parsing only. Deciding which issuer a headline is about needs the registry, and
+Bronze holds what the publisher sent, never what we concluded from it.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import re
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -17,11 +19,8 @@ from minio import Minio
 from pipeline.bronze.feeds import FEEDS
 from pipeline.bronze.ingest import client, land_payloads, read_object
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
-from pipeline.config import BRONZE_BUCKET, Settings, get_settings
+from pipeline.config import BRONZE_BUCKET, get_settings
 from pipeline.reference.matcher import Registry
-from pipeline.reference.store import read as read_registry
-
-_CODE = re.compile(r"\b[A-Z]{4}\b")
 
 _ACTIVE_DATASETS = {spec.dataset for spec in FEEDS.values() if spec.source == "news_rss"}
 
@@ -41,15 +40,6 @@ def _published_at(raw: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).isoformat()
-
-
-def _code_candidates(*texts: str) -> list[str]:
-    """Raw 4-letter tokens in the order they appear; the registry decides which are real."""
-    seen: dict[str, None] = {}
-    for text in texts:
-        for code in _CODE.findall(text):
-            seen.setdefault(code, None)
-    return list(seen)
 
 
 def parse_rss(xml: bytes, source_dataset: str) -> list[dict[str, Any]]:
@@ -75,7 +65,6 @@ def parse_rss(xml: bytes, source_dataset: str) -> list[dict[str, Any]]:
                 "summary": summary,
                 "url": link,
                 "published_at": _published_at(_text(node, "pubDate")),
-                "candidate_tickers": _code_candidates(title, summary),
             }
         )
     return items
@@ -113,10 +102,9 @@ def day_items(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
     return sorted(seen.values(), key=lambda i: i["item_id"])
 
 
-def normalize_from_bronze(minio: Minio, trade_date: date, settings: Settings) -> dict[str, Any]:
-    """Reads raw RSS for the date, tags and dedups items, lands them to news_rss/items."""
-    registry = Registry(read_registry(settings.postgres_dsn))
-    items = tag_items(day_items(minio, trade_date), registry)
+def normalize_from_bronze(minio: Minio, trade_date: date) -> dict[str, Any]:
+    """Reads raw RSS for the date, dedups the items, lands them to news_rss/items."""
+    items = day_items(minio, trade_date)
     payload = json.dumps(items, ensure_ascii=False).encode("utf-8")
     return land_payloads(
         minio,
@@ -138,7 +126,7 @@ def main() -> None:
 
     settings = get_settings()
     trade_date = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
-    manifest = normalize_from_bronze(client(settings), trade_date, settings)
+    manifest = normalize_from_bronze(client(settings), trade_date)
     print(f"normalized {manifest['record_count']} news items for {trade_date}")
 
 
