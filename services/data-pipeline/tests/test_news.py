@@ -103,6 +103,53 @@ def test_day_items_dedups_across_payloads(monkeypatch: pytest.MonkeyPatch) -> No
     assert len(ids) == 2 and ids == sorted(ids) and len(set(ids)) == 2
 
 
+class _StubObject:
+    def __init__(self, name: str) -> None:
+        self.object_name = name
+
+
+class _StubMinio:
+    """Records every prefix asked for, so the test can assert what was requested."""
+
+    def __init__(self, keys: list[str]) -> None:
+        self._keys = keys
+        self.prefixes: list[str] = []
+
+    def list_objects(self, bucket: str, prefix: str = "", recursive: bool = False):
+        self.prefixes.append(prefix)
+        return [_StubObject(k) for k in self._keys if k.startswith(prefix)]
+
+
+def test_read_raw_asks_the_store_for_one_day_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The date lives in the prefix, so listing cost stays flat as history grows."""
+    keys = [
+        "news_rss/cnbc_market/ingest_date=2026-07-03/source_version=v1/part-A-0000.xml.zst",
+        "news_rss/cnbc_market/ingest_date=2020-01-01/source_version=v1/part-OLD-0000.xml.zst",
+        "news_rss/items/ingest_date=2026-07-03/source_version=v1/part-B-0000.json.zst",
+    ]
+    stub = _StubMinio(keys)
+    monkeypatch.setattr(news, "read_object", lambda minio, name: b"<rss></rss>")
+
+    got = news._read_raw(cast("Minio", stub), date(2026, 7, 3))
+
+    assert [d for d, _ in got] == ["cnbc_market"]
+    assert all("ingest_date=2026-07-03" in p for p in stub.prefixes)
+    assert not any(p == "news_rss/" for p in stub.prefixes)
+
+
+def test_read_raw_never_lists_the_whole_feed_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Years of old polls cost nothing, because the store never returns them."""
+    old = [
+        f"news_rss/cnbc_market/ingest_date=2020-01-{d:02d}/source_version=v1/part-{d}-0000.xml.zst"
+        for d in range(1, 29)
+    ]
+    today = ["news_rss/cnbc_market/ingest_date=2026-07-03/source_version=v1/part-NEW-0000.xml.zst"]
+    stub = _StubMinio(old + today)
+    monkeypatch.setattr(news, "read_object", lambda minio, name: b"<rss></rss>")
+
+    assert len(news._read_raw(cast("Minio", stub), date(2026, 7, 3))) == 1
+
+
 def test_landed_news_carries_no_issuer_tags(monkeypatch: pytest.MonkeyPatch) -> None:
     """What reaches Bronze is what the publisher sent, never what we concluded."""
     landed: dict[str, object] = {}

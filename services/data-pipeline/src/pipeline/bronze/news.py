@@ -80,16 +80,15 @@ def tag_items(items: list[dict[str, Any]], registry: Registry) -> list[dict[str,
 
 
 def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
-    prefix = "news_rss/"
+    """The day's raw payloads, asked for by path so the store does the filtering."""
     out = []
-    for obj in minio.list_objects(BRONZE_BUCKET, prefix=prefix, recursive=True):
-        name = obj.object_name
-        if "/items/" in name or f"ingest_date={trade_date.isoformat()}" not in name or not name.endswith(".zst"):
-            continue
-        dataset = name.split("/")[1]
-        if dataset not in _ACTIVE_DATASETS:
-            continue
-        out.append((dataset, read_object(minio, name)))
+    for dataset in sorted(_ACTIVE_DATASETS):
+        prefix = f"news_rss/{dataset}/ingest_date={trade_date.isoformat()}/"
+        for obj in minio.list_objects(BRONZE_BUCKET, prefix=prefix, recursive=True):
+            name = obj.object_name
+            if not name.endswith(".zst"):
+                continue
+            out.append((dataset, read_object(minio, name)))
     return out
 
 
