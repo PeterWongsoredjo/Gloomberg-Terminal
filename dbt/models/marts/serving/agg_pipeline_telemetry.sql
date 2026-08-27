@@ -17,9 +17,11 @@ select
     m.expected_universe,
     m.observed_universe,
     m.missing_tickers,
+    m.declared_record_total,
     coalesce(q.quarantine_count, 0) as quarantine_count,
     m.completed_at as data_as_of,
-    case when m.status = 'PARTIAL' then ['COVERAGE_GAP']::varchar[] else []::varchar[] end as dq_flags
+    -- the flags the gate itself decided; status is not evidence of which flag applies
+    m.dq_flags
 from manifests m
 left join quarantine q
     on m.source = q.source and m.dataset = q.dataset and m.trade_date = q.trade_date

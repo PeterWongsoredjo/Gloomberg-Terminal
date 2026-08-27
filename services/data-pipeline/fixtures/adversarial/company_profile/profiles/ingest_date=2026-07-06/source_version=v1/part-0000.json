@@ -1,5 +1,60 @@
 {
-  "data": [
-    {"KodeEmiten": "WXYZ", "NamaEmiten": "PT Unknown Board Tbk", "PapanPencatatan": "Papan Aneh", "Sektor": "Energi", "SubSektor": "Batu Bara", "Industri": "Batu Bara", "SubIndustri": "Produksi Batu Bara", "TanggalPencatatan": "2025-01-10T00:00:00", "EfekEmiten_Saham": true}
-  ]
+ "recordsTotal": 5,
+ "data": [
+  {
+   "KodeEmiten": "AADI",
+   "NamaEmiten": "PT Adaro Andalan Indonesia Tbk",
+   "PapanPencatatan": "Utama",
+   "Sektor": "Energi",
+   "SubSektor": "Batu Bara",
+   "Industri": "Batu Bara",
+   "SubIndustri": "Produksi Batu Bara",
+   "TanggalPencatatan": "2024-12-05T00:00:00",
+   "EfekEmiten_Saham": true
+  },
+  {
+   "KodeEmiten": "AALI",
+   "NamaEmiten": "PT Astra Agro Lestari Tbk",
+   "PapanPencatatan": "Utama",
+   "Sektor": "Energi",
+   "SubSektor": "Batu Bara",
+   "Industri": "Batu Bara",
+   "SubIndustri": "Produksi Batu Bara",
+   "TanggalPencatatan": "1997-12-09T00:00:00",
+   "EfekEmiten_Saham": true
+  },
+  {
+   "KodeEmiten": "MTRA",
+   "NamaEmiten": "PT Mitra Pemantauan Tbk",
+   "PapanPencatatan": "Pemantauan Khusus",
+   "Sektor": "Energi",
+   "SubSektor": "Batu Bara",
+   "Industri": "Batu Bara",
+   "SubIndustri": "Produksi Batu Bara",
+   "TanggalPencatatan": "2025-03-11T00:00:00",
+   "EfekEmiten_Saham": true
+  },
+  {
+   "KodeEmiten": "MSNG",
+   "NamaEmiten": "PT Missing Emiten Tbk",
+   "PapanPencatatan": "Pengembangan",
+   "Sektor": "Energi",
+   "SubSektor": "Batu Bara",
+   "Industri": "Batu Bara",
+   "SubIndustri": "Produksi Batu Bara",
+   "TanggalPencatatan": "2023-05-02T00:00:00",
+   "EfekEmiten_Saham": true
+  },
+  {
+   "KodeEmiten": "GONE",
+   "NamaEmiten": "PT Gone Emiten Tbk",
+   "PapanPencatatan": "Pengembangan",
+   "Sektor": "Energi",
+   "SubSektor": "Batu Bara",
+   "Industri": "Batu Bara",
+   "SubIndustri": "Produksi Batu Bara",
+   "TanggalPencatatan": "2022-08-17T00:00:00",
+   "EfekEmiten_Saham": true
+  }
+ ]
 }

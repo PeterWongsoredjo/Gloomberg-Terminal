@@ -49,6 +49,22 @@ def is_trading_day(day: date, calendar_seed: Path) -> bool:
     return day.weekday() < 5  # Monday-Friday
 
 
+# a run of closed days longer than this is a broken calendar, not a holiday
+MAX_CLOSED_RUN_DAYS = 14
+
+
+def previous_trading_day(day: date, calendar_seed: Path) -> date | None:
+    """The last session the market was open before this day, None when none is near."""
+    overrides = _load_overrides(calendar_seed)
+    for back in range(1, MAX_CLOSED_RUN_DAYS + 1):
+        candidate = day - timedelta(days=back)
+        override = overrides.get(candidate)
+        open_that_day = override.is_trading if override else candidate.weekday() < 5
+        if open_that_day:
+            return candidate
+    return None
+
+
 def holiday_reason(day: date, calendar_seed: Path) -> str:
     if day.weekday() >= 5:
         return "weekend"

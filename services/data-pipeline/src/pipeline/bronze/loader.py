@@ -6,13 +6,19 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any
 
 from minio import Minio
 
-from pipeline.bronze.ingest import client, land_payloads
+from pipeline.bronze.feeds import spec_for
+from pipeline.bronze.ingest import (
+    client,
+    land_payloads,
+    landing_verdict,
+    upstream_record_total,
+)
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
@@ -30,11 +36,22 @@ def _parse_partition(part_dir: Path, kind_root: Path) -> tuple[str, str, date, s
     return source, dataset, trade_date, source_version
 
 
+def _declared_capture(trade_date: date) -> datetime:
+    """Midday WIB on the partition date, so a replayed fixture reads as captured then."""
+    return datetime.combine(trade_date, time(5, 0), tzinfo=timezone.utc)
+
+
 def load_partition(minio: Minio, part_dir: Path, kind_root: Path) -> dict[str, Any]:
     source, dataset, trade_date, source_version = _parse_partition(part_dir, kind_root)
     meta = json.loads((part_dir / META_FILE).read_text(encoding="utf-8"))
     run_id = deterministic_run_id(idempotency_key(source, dataset, trade_date, source_version))
     payloads = [part.read_bytes() for part in sorted(part_dir.glob("part-*.json"))]
+    spec = spec_for(source, dataset)
+    count = int(meta["record_count"])
+    declared = upstream_record_total(payloads[0], "json") if payloads else None
+    status, notes = landing_verdict(spec, count, declared) if spec else ("SUCCESS", "")
+    # a committed fixture declares it was captured on the day it files under
+    captured_at = _declared_capture(trade_date)
 
     return land_payloads(
         minio,
@@ -44,10 +61,11 @@ def load_partition(minio: Minio, part_dir: Path, kind_root: Path) -> dict[str, A
         source_version=source_version,
         ingest_run_id=run_id,
         payloads=payloads,
-        record_count=int(meta["record_count"]),
-        expected_universe=int(meta.get("expected_universe", meta["record_count"])),
-        missing_tickers=list(meta.get("missing_tickers", [])),
-        requested_at=datetime.now(timezone.utc),
+        record_count=count,
+        declared_record_total=declared,
+        requested_at=captured_at,
+        status=status,
+        notes=notes,
     )
 
 

@@ -70,7 +70,7 @@ sources:
       - name: manifests
         meta:
           formatter: "template"
-          external_location: "read_json('s3://gloomberg-bronze/_manifests/*/*/*/*.json', format='unstructured', records=true, columns={ingest_run_id: 'VARCHAR', source: 'VARCHAR', dataset: 'VARCHAR', trade_date: 'DATE', source_version: 'VARCHAR', status: 'VARCHAR', record_count: 'BIGINT', completed_at: 'TIMESTAMP', quality: 'STRUCT(expected_universe BIGINT, observed_universe BIGINT, missing_tickers VARCHAR[], coverage_ratio DOUBLE)'})"
+          external_location: "read_json('s3://gloomberg-bronze/_manifests/*/*/*/*.json', format='unstructured', records=true, columns={ingest_run_id: 'VARCHAR', source: 'VARCHAR', dataset: 'VARCHAR', trade_date: 'DATE', source_version: 'VARCHAR', status: 'VARCHAR', record_count: 'BIGINT', completed_at: 'TIMESTAMP', quality: 'STRUCT(expected_universe BIGINT, observed_universe BIGINT, missing_tickers VARCHAR[], coverage_ratio DOUBLE, dq_flags VARCHAR[])', upstream: 'STRUCT(declared_record_total BIGINT)'})"
 
   # Financial news RSS, normalized to JSON items by the sentiment flow; the agent's
   # news context and stg_news_rss both read this.

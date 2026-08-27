@@ -10,3 +10,11 @@ select 'company_profile' as source, 'profiles' as dataset, _ingest_date as trade
 from {{ ref('stg_company_profile') }}
 where len(_dq_flags) > 0
 group by _ingest_date
+
+union all
+
+-- keyed on the capture day, because a quarantined index row has no usable trade_date
+select 'idx_summary' as source, 'index_level' as dataset, _ingest_date as trade_date, count(*) as quarantine_count
+from {{ ref('stg_idx_summary__index_level') }}
+where len(_dq_flags) > 0
+group by _ingest_date

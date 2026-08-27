@@ -10,6 +10,8 @@ select
     observed_universe,
     coverage_ratio,
     missing_tickers,
+    dq_flags,
+    declared_record_total,
     completed_at
 from {{ ref('stg_manifests') }}
 qualify row_number() over (

@@ -1,5 +1,3 @@
 {
-  "record_count": 3,
-  "expected_universe": 5,
-  "missing_tickers": ["MSNG", "GONE"]
+  "record_count": 4
 }

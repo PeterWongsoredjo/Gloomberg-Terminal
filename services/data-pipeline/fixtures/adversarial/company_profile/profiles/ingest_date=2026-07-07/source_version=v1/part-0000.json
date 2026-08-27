@@ -1,0 +1,16 @@
+{
+ "recordsTotal": 1,
+ "data": [
+  {
+   "KodeEmiten": "WXYZ",
+   "NamaEmiten": "PT Unknown Board Tbk",
+   "PapanPencatatan": "Papan Aneh",
+   "Sektor": "Energi",
+   "SubSektor": "Batu Bara",
+   "Industri": "Batu Bara",
+   "SubIndustri": "Produksi Batu Bara",
+   "TanggalPencatatan": "2025-01-10T00:00:00",
+   "EfekEmiten_Saham": true
+  }
+ ]
+}

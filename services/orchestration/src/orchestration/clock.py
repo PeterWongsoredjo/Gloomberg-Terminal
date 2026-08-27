@@ -1,19 +1,12 @@
-"""Shared time helpers so every flow derives the WIB trade date one way."""
+"""Trade-date helpers, re-exported from the pipeline package so there is one WIB rule."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 
-WIB_OFFSET_HOURS = 7
+from pipeline.clock import WIB_OFFSET_HOURS, now_utc, wib_date, wib_today
 
-
-def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def wib_today() -> date:
-    """Today's trade date in Jakarta time."""
-    return (now_utc() + timedelta(hours=WIB_OFFSET_HOURS)).date()
+__all__ = ["WIB_OFFSET_HOURS", "coerce_date", "now_utc", "wib_date", "wib_today"]
 
 
 def coerce_date(value: str | None) -> date:

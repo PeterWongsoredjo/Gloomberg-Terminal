@@ -1,7 +1,81 @@
 {
-  "data": [
-    {"StockCode": "AADI", "Date": "2026-07-06T00:00:00", "Remarks": "----", "Previous": 7975.0, "OpenPrice": 8000.0, "High": 8100.0, "Low": 7950.0, "Close": 8050.0, "Change": 75.0, "Volume": 3000000.0, "Value": 24000000000.0, "Frequency": 1200.0, "ForeignBuy": 1000000.0, "ForeignSell": 500000.0, "ListedShares": 7786891760.0, "Bid": 8050.0, "Offer": 8075.0},
-    {"StockCode": "AALI", "Date": "2026-07-06T00:00:00", "Remarks": "----", "Previous": 6025.0, "OpenPrice": 6000.0, "High": 6100.0, "Low": 5975.0, "Close": "6.000,00", "Change": -25.0, "Volume": 500000.0, "Value": 3000000000.0, "Frequency": 400.0, "ForeignBuy": 200000.0, "ForeignSell": 100000.0, "ListedShares": 1924688333.0, "Bid": 6000.0, "Offer": 6025.0},
-    {"StockCode": "AB1C", "Date": "2026-07-06T00:00:00", "Remarks": "----", "Previous": 100.0, "OpenPrice": 100.0, "High": 105.0, "Low": 99.0, "Close": 102.0, "Change": 2.0, "Volume": 10000.0, "Value": 1020000.0, "Frequency": 10.0, "ForeignBuy": 0.0, "ForeignSell": 0.0, "ListedShares": 1000000.0, "Bid": 102.0, "Offer": 103.0}
-  ]
+ "data": [
+  {
+   "StockCode": "AADI",
+   "Date": "2026-07-06T00:00:00",
+   "Remarks": "----",
+   "Previous": 7975.0,
+   "OpenPrice": 8000.0,
+   "High": 8100.0,
+   "Low": 7950.0,
+   "Close": 8050.0,
+   "Change": 75.0,
+   "Volume": 3000000.0,
+   "Value": 24000000000.0,
+   "Frequency": 1200.0,
+   "ForeignBuy": 1000000.0,
+   "ForeignSell": 500000.0,
+   "ListedShares": 7786891760.0,
+   "Bid": 8050.0,
+   "Offer": 8075.0
+  },
+  {
+   "StockCode": "AALI",
+   "Date": "2026-07-06T00:00:00",
+   "Remarks": "----",
+   "Previous": 6025.0,
+   "OpenPrice": 6000.0,
+   "High": 6100.0,
+   "Low": 5975.0,
+   "Close": "6.000,00",
+   "Change": -25.0,
+   "Volume": 500000.0,
+   "Value": 3000000000.0,
+   "Frequency": 400.0,
+   "ForeignBuy": 200000.0,
+   "ForeignSell": 100000.0,
+   "ListedShares": 1924688333.0,
+   "Bid": 6000.0,
+   "Offer": 6025.0
+  },
+  {
+   "StockCode": "MTRA",
+   "Date": "2026-07-06T00:00:00",
+   "Remarks": "----",
+   "Previous": 50.0,
+   "OpenPrice": 50.0,
+   "High": 50.0,
+   "Low": 50.0,
+   "Close": 50.0,
+   "Change": 0.0,
+   "Volume": 0.0,
+   "Value": 0.0,
+   "Frequency": 0.0,
+   "ForeignBuy": 0.0,
+   "ForeignSell": 0.0,
+   "ListedShares": 1000000.0,
+   "Bid": 50.0,
+   "Offer": 51.0
+  },
+  {
+   "StockCode": "AB1C",
+   "Date": "2026-07-06T00:00:00",
+   "Remarks": "----",
+   "Previous": 100.0,
+   "OpenPrice": 100.0,
+   "High": 105.0,
+   "Low": 99.0,
+   "Close": 102.0,
+   "Change": 2.0,
+   "Volume": 10000.0,
+   "Value": 1020000.0,
+   "Frequency": 10.0,
+   "ForeignBuy": 0.0,
+   "ForeignSell": 0.0,
+   "ListedShares": 1000000.0,
+   "Bid": 102.0,
+   "Offer": 103.0
+  }
+ ],
+ "recordsTotal": 4
 }

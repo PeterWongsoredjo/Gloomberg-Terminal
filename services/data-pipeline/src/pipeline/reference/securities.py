@@ -21,7 +21,7 @@ _INDEX_ROWS = (
     ("IHSG", "Indeks Harga Saham Gabungan", "INDEX", ("INDEKS HARGA SAHAM GABUNGAN", "COMPOSITE INDEX")),
 )
 
-_TICKER_RE = re.compile(r"^[A-Z]{4}$")
+TICKER_RE = re.compile(r"^[A-Z]{4}$")
 
 _BOARDS = {
     "Utama": "MAIN",
@@ -61,7 +61,7 @@ def _drop_ambiguous(securities: list[Security]) -> list[Security]:
     ]
 
 
-def _profile_rows(payload: Any) -> list[dict[str, Any]]:
+def profile_rows(payload: Any) -> list[dict[str, Any]]:
     rows = payload.get("data") if isinstance(payload, dict) else payload
     return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
@@ -69,12 +69,12 @@ def _profile_rows(payload: Any) -> list[dict[str, Any]]:
 def _equity_rows(payload: Any) -> list[tuple[str, str, str | None]]:
     """Ticker, company name and board for every listed equity in the payload."""
     seen: dict[str, tuple[str, str, str | None]] = {}
-    for row in _profile_rows(payload):
+    for row in profile_rows(payload):
         if not row.get("EfekEmiten_Saham"):
             continue
         ticker = str(row.get("KodeEmiten") or "").strip().upper()
         company_name = str(row.get("NamaEmiten") or "").strip()
-        if not _TICKER_RE.fullmatch(ticker) or not company_name:
+        if not TICKER_RE.fullmatch(ticker) or not company_name:
             continue  # unparseable identity is dropped, never guessed at
         board = _BOARDS.get(str(row.get("PapanPencatatan") or "").strip())
         seen.setdefault(ticker, (ticker, company_name, board))

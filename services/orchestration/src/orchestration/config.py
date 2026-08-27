@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from pipeline.config import REPO_ROOT, load_root_env
+from pipeline.quality.universe import MIN_PLAUSIBLE_SECURITIES
 
 from orchestration.universe import load_universe
 
@@ -27,6 +28,8 @@ class OrchestrationConfig:
     poll_timeout_seconds: float
     trigger_timeout_seconds: float
     eod_cron: str
+    # below this an IDX profile payload is broken, not a small market
+    universe_min_securities: int = MIN_PLAUSIBLE_SECURITIES
     session_windows: Path = REPO_ROOT / "services" / "backend-api" / "app" / "observability" / "config" / "session_windows.yaml"
     intraday_objective: str = "article_sentiment"
     intraday_insight_objective: str = "intraday_insight"
@@ -51,6 +54,9 @@ def get_config() -> OrchestrationConfig:
         ),
         coverage_floor=float(os.environ.get("GLOOMBERG_ORCH_COVERAGE_FLOOR", "0.95")),
         coverage_hard_min=float(os.environ.get("GLOOMBERG_ORCH_COVERAGE_HARD_MIN", "0.80")),
+        universe_min_securities=int(
+            os.environ.get("GLOOMBERG_ORCH_UNIVERSE_MIN_SECURITIES", str(MIN_PLAUSIBLE_SECURITIES))
+        ),
         ingest_mode=os.environ.get("GLOOMBERG_ORCH_INGEST_MODE", "live").lower(),
         backend_api_url=os.environ.get("GLOOMBERG_ORCH_BACKEND_API_URL", "http://127.0.0.1:8000"),
         backend_api_token=os.environ.get("GLOOMBERG_ORCH_BACKEND_API_TOKEN", ""),

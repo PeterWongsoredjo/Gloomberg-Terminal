@@ -20,6 +20,8 @@ class FeedSpec:
     ext: str = "json"
     is_universe: bool = False
     date_scoped: bool = False
+    # the upstream answers for right now, so its partition records capture, not coverage
+    current_state: bool = False
     accumulates: bool = False
     needs_proxy: bool = False
     # how many days back the url window starts, so a missed day self heals
@@ -41,6 +43,7 @@ FEEDS: dict[str, FeedSpec] = {
         dataset="index_level",
         url=IDX + "/TradingSummary/GetIndexSummary",
         needs_proxy=True,
+        current_state=True,
     ),
     "corporate_actions": FeedSpec(
         source="corporate_actions",
@@ -53,6 +56,7 @@ FEEDS: dict[str, FeedSpec] = {
         dataset="profiles",
         url=IDX + "/ListedCompany/GetCompanyProfiles?kodeEmiten=&emitenType=s&start=0&length=9999",
         needs_proxy=True,
+        current_state=True,
     ),
     "dividend_announcements": FeedSpec(
         source="corporate_actions",
@@ -90,3 +94,12 @@ FEEDS: dict[str, FeedSpec] = {
 # the subset that a daily EOD flow ingests (news has its own lighter cadence)
 EOD_FEEDS = [name for name, spec in FEEDS.items() if spec.source != "news_rss"]
 NEWS_FEEDS = [name for name, spec in FEEDS.items() if spec.source == "news_rss"]
+
+UNIVERSE_PAIRS = {(spec.source, spec.dataset) for spec in FEEDS.values() if spec.is_universe}
+
+
+def spec_for(source: str, dataset: str) -> FeedSpec | None:
+    """The feed a landed object belongs to, None for a dataset no feed declares."""
+    return next(
+        (s for s in FEEDS.values() if s.source == source and s.dataset == dataset), None
+    )

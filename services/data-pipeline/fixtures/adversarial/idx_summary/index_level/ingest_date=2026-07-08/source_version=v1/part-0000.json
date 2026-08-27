@@ -1,0 +1,54 @@
+{
+ "recordsTotal": 3,
+ "recordsFiltered": 3,
+ "data": [
+  {
+   "No": 1,
+   "IndexSummaryID": 900001,
+   "Date": "2026-07-03T00:00:00",
+   "IndexCode": "LQ45",
+   "Previous": 565.493,
+   "Highest": 583.893,
+   "Lowest": 572.3,
+   "Close": 581.999,
+   "NumberOfStock": 45.0,
+   "Change": 16.506,
+   "Volume": 4292854948.0,
+   "Value": 5415569922952.0,
+   "Frequency": 423440.0,
+   "MarketCapital": 4031453577082980.0
+  },
+  {
+   "No": 2,
+   "IndexSummaryID": 900002,
+   "Date": "not-a-date",
+   "IndexCode": "IDXBADD",
+   "Previous": 1.0,
+   "Highest": 1.0,
+   "Lowest": 1.0,
+   "Close": 1.0,
+   "NumberOfStock": 1.0,
+   "Change": 0.0,
+   "Volume": 1.0,
+   "Value": 1.0,
+   "Frequency": 1.0,
+   "MarketCapital": 1.0
+  },
+  {
+   "No": 3,
+   "IndexSummaryID": 900003,
+   "Date": "2026-07-03T20:00:00",
+   "IndexCode": "IDXLATE",
+   "Previous": 100.0,
+   "Highest": 101.0,
+   "Lowest": 99.0,
+   "Close": 100.5,
+   "NumberOfStock": 5.0,
+   "Change": 0.5,
+   "Volume": 1.0,
+   "Value": 1.0,
+   "Frequency": 1.0,
+   "MarketCapital": 1.0
+  }
+ ]
+}

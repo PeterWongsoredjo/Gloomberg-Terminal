@@ -27,6 +27,38 @@ def idempotency_key(source: str, dataset: str, trade_date: date, source_version:
     return f"{source}:{dataset}:{trade_date.isoformat()}:{source_version}"
 
 
+def quality_block(
+    expected_universe: int | None,
+    missing_tickers: list[str] | None,
+    dq_flags: list[str] | None = None,
+) -> dict[str, Any]:
+    """The coverage numbers, all null when nobody has actually compared anything yet."""
+    flags = list(dq_flags or [])
+    if not expected_universe:
+        return {
+            "expected_universe": None,
+            "observed_universe": None,
+            "missing_tickers": [],
+            "coverage_ratio": None,
+            "dq_flags": flags,
+        }
+    missing = list(missing_tickers or [])
+    observed = expected_universe - len(missing)
+    return {
+        "expected_universe": expected_universe,
+        "observed_universe": observed,
+        "missing_tickers": missing,
+        "coverage_ratio": round(observed / expected_universe, 4),
+        "dq_flags": flags,
+    }
+
+
+def coverage_evaluated(manifest: dict[str, Any]) -> bool:
+    """Whether anything ever measured this run's coverage, rather than leaving it open."""
+    quality: dict[str, Any] = manifest.get("quality") or {}
+    return quality.get("coverage_ratio") is not None
+
+
 def build_manifest(
     *,
     ingest_run_id: str,
@@ -36,19 +68,19 @@ def build_manifest(
     source_version: str,
     payloads: list[bytes],
     record_count: int,
-    expected_universe: int,
-    missing_tickers: list[str],
     requested_at: datetime,
+    expected_universe: int | None = None,
+    missing_tickers: list[str] | None = None,
+    declared_record_total: int | None = None,
     status: str | None = None,
     notes: str = "",
 ) -> dict[str, Any]:
     """Assembles a full manifest for one Bronze ingestion run."""
-    observed = expected_universe - len(missing_tickers)
-    coverage_ratio = round(observed / expected_universe, 4) if expected_universe else 1.0
-    resolved_status = status or ("SUCCESS" if not missing_tickers else "PARTIAL")
+    quality = quality_block(expected_universe, missing_tickers)
+    resolved_status = status or ("SUCCESS" if not quality["missing_tickers"] else "PARTIAL")
     bytes_written = sum(len(p) for p in payloads)
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "ingest_run_id": ingest_run_id,
         "source": source,
         "dataset": dataset,
@@ -62,12 +94,8 @@ def build_manifest(
         "bytes_written": bytes_written,
         "content_sha256": content_sha256(payloads),
         "idempotency_key": idempotency_key(source, dataset, trade_date, source_version),
-        "quality": {
-            "expected_universe": expected_universe,
-            "observed_universe": observed,
-            "missing_tickers": missing_tickers,
-            "coverage_ratio": coverage_ratio,
-        },
+        "upstream": {"declared_record_total": declared_record_total},
+        "quality": quality,
         "notes": notes,
     }
 

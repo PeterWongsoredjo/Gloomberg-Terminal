@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import io
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import zstandard
@@ -17,6 +17,7 @@ from ulid import ULID
 from pipeline.bronze import paths
 from pipeline.bronze.feeds import FeedSpec
 from pipeline.bronze.manifest import build_manifest, deterministic_run_id, idempotency_key
+from pipeline.clock import now_utc, wib_date
 from pipeline.config import BRONZE_BUCKET, Settings
 
 
@@ -99,6 +100,28 @@ def record_count(raw: bytes, ext: str) -> int:
     return 1
 
 
+def upstream_record_total(raw: bytes, ext: str) -> int | None:
+    """How many rows the upstream itself claims it has, None when it never says."""
+    if ext == "xml":
+        return None
+    parsed: Any = json.loads(raw)
+    if not isinstance(parsed, dict):
+        return None
+    total = parsed.get("recordsTotal")
+    return total if isinstance(total, int) else None
+
+
+def write_manifest(minio: Minio, manifest: dict[str, Any]) -> None:
+    """Puts a manifest at its own key, so a revision lands exactly where the run did."""
+    key = paths.manifest_key(
+        manifest["source"],
+        manifest["dataset"],
+        date.fromisoformat(manifest["trade_date"]),
+        manifest["ingest_run_id"],
+    )
+    _put(minio, key, json.dumps(manifest, indent=2).encode(), "application/json")
+
+
 def land_payloads(
     minio: Minio,
     *,
@@ -109,9 +132,10 @@ def land_payloads(
     ingest_run_id: str,
     payloads: list[bytes],
     record_count: int,
-    expected_universe: int,
-    missing_tickers: list[str],
     requested_at: datetime,
+    expected_universe: int | None = None,
+    missing_tickers: list[str] | None = None,
+    declared_record_total: int | None = None,
     ext: str = "json",
     status: str | None = None,
     notes: str = "",
@@ -131,61 +155,81 @@ def land_payloads(
         record_count=record_count,
         expected_universe=expected_universe,
         missing_tickers=missing_tickers,
+        declared_record_total=declared_record_total,
         requested_at=requested_at,
         status=status,
         notes=notes,
     )
-    mkey = paths.manifest_key(source, dataset, trade_date, ingest_run_id)
-    _put(minio, mkey, json.dumps(manifest, indent=2).encode(), "application/json")
+    write_manifest(minio, manifest)
     return manifest
 
 
-def run_id_for(spec: FeedSpec, trade_date: date) -> str:
+def landing_date(spec: FeedSpec, trade_date: date, captured_at: datetime) -> date:
+    """The date a payload files under: what it asked for, or when it was taken."""
+    if spec.current_state:
+        return wib_date(captured_at)
+    return trade_date
+
+
+def run_id_for(spec: FeedSpec, landed_on: date) -> str:
     """Fresh id for accumulating feeds, deterministic id so EOD re-runs replace."""
     if spec.accumulates:
         return str(ULID())
     return deterministic_run_id(
-        idempotency_key(spec.source, spec.dataset, trade_date, spec.source_version)
+        idempotency_key(spec.source, spec.dataset, landed_on, spec.source_version)
     )
+
+
+def landing_verdict(spec: FeedSpec, count: int, declared: int | None) -> tuple[str, str]:
+    """What raw landing alone can honestly say about the payload it just wrote."""
+    if declared is not None and count != declared:
+        return "PARTIAL", f"upstream declared {declared} rows, {count} arrived"
+    if spec.is_universe:
+        return "PARTIAL", "coverage not evaluated yet"
+    return "SUCCESS", ""
 
 
 def fetch_and_land(
     minio: Minio, spec: FeedSpec, trade_date: date, *, proxy: str | None = None
 ) -> dict[str, Any]:
     """Fetches one live feed and lands it in Bronze, raises FetchError on upstream failure."""
+    captured_at = now_utc()
     raw = fetch(url_for(spec, trade_date), proxy=proxy if spec.needs_proxy else None)
+    landed_on = landing_date(spec, trade_date, captured_at)
     count = record_count(raw, spec.ext)
+    declared = upstream_record_total(raw, spec.ext)
+    status, notes = landing_verdict(spec, count, declared)
     return land_payloads(
         minio,
         source=spec.source,
         dataset=spec.dataset,
-        trade_date=trade_date,
+        trade_date=landed_on,
         source_version=spec.source_version,
-        ingest_run_id=run_id_for(spec, trade_date),
+        ingest_run_id=run_id_for(spec, landed_on),
         payloads=[raw],
         record_count=count,
-        expected_universe=count,  # no live universe oracle; coverage gaps come from manifest quality
-        missing_tickers=[],
-        requested_at=datetime.now(timezone.utc),
+        declared_record_total=declared,
+        requested_at=captured_at,
         ext=spec.ext,
+        status=status,
+        notes=notes,
     )
 
 
 def emit_failed_manifest(minio: Minio, spec: FeedSpec, trade_date: date, reason: str) -> dict[str, Any]:
+    captured_at = now_utc()
+    landed_on = landing_date(spec, trade_date, captured_at)
     manifest = build_manifest(
-        ingest_run_id=run_id_for(spec, trade_date),
+        ingest_run_id=run_id_for(spec, landed_on),
         source=spec.source,
         dataset=spec.dataset,
-        trade_date=trade_date,
+        trade_date=landed_on,
         source_version=spec.source_version,
         payloads=[],
         record_count=0,
-        expected_universe=0,
-        missing_tickers=[],
-        requested_at=datetime.now(timezone.utc),
+        requested_at=captured_at,
         status="FAILED",
         notes=reason,
     )
-    mkey = paths.manifest_key(spec.source, spec.dataset, trade_date, manifest["ingest_run_id"])
-    _put(minio, mkey, json.dumps(manifest, indent=2).encode(), "application/json")
+    write_manifest(minio, manifest)
     return manifest

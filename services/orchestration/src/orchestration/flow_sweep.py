@@ -16,7 +16,6 @@ from prefect import flow
 from prefect.runtime import flow_run
 from prefect.task_runners import ThreadPoolTaskRunner
 
-from pipeline.bronze.feeds import FEEDS
 from pipeline.config import get_settings
 
 from orchestration.clock import coerce_date, now_utc
@@ -26,7 +25,12 @@ from orchestration.results import PhaseResult
 from orchestration.tasks.dbt_build import dbt_build
 from orchestration.tasks.finalize import finalize_run
 from orchestration.tasks.promote import promote_gold
-from orchestration.tasks.sweep import recovered_feeds, resweep_dividend_documents, resweep_feeds
+from orchestration.tasks.sweep import (
+    coverage_recovered,
+    recovered_feeds,
+    resweep_dividend_documents,
+    resweep_feeds,
+)
 
 
 def _degrade_on_rebuild_failure(exc: Exception) -> PhaseResult | None:
@@ -34,9 +38,9 @@ def _degrade_on_rebuild_failure(exc: Exception) -> PhaseResult | None:
     return PhaseResult(status="DEGRADED", notes=f"resweep rebuild failed: {exc}")
 
 
-def _rebuild_needed(recovered: list[str]) -> bool:
-    """Only a universe feed changes the day's prices enough to justify a rebuild."""
-    return any(FEEDS[name].is_universe for name in recovered)
+def _rebuild_needed(recovered: list[str], coverage_ok: bool) -> bool:
+    """New bytes alone never ship; the gate has to say the day may be promoted."""
+    return bool(recovered) and coverage_ok
 
 
 def _rebuild_result(
@@ -75,10 +79,10 @@ def idx_resweep_flow(trade_date: str | None = None) -> str:
         )
 
         recovered = recovered_feeds(feeds)
-        if _rebuild_needed(recovered):
+        if _rebuild_needed(recovered, coverage_recovered(feeds)):
             rebuild = _rebuild_result(dsn, flow_run_id, td, config)
         else:
-            skip = PhaseResult(status="SKIPPED", notes="no universe feed recovered")
+            skip = PhaseResult(status="SKIPPED", notes="nothing recovered that changes Gold")
             rebuild = run_phase(dsn, flow_run_id, td, "resweep_dbt_build", lambda: skip)
 
         overall = rollup(feeds.status, documents.status, rebuild.status)

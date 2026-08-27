@@ -7,6 +7,13 @@ models:
       - name: trade_date
         data_tests: [not_null]
 
+  - name: stg_idx_summary__index_level
+    description: "Typed IDX index levels. trade_date comes from the row's own Date; an
+      unreadable one is flagged in _dq_flags, never filled from the capture partition."
+    columns:
+      - name: index_id
+        data_tests: [not_null]
+
   - name: stg_manifests
     description: "One row per CT-003 ingestion run."
     columns:

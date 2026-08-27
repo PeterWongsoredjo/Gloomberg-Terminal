@@ -25,7 +25,7 @@ from orchestration.config import OrchestrationConfig, get_config
 from orchestration.errors import TriggerPermanentError, TriggerTransientError
 from orchestration.phases import rollup, run_phase
 from orchestration.results import PhaseResult
-from orchestration.tasks.coverage import coverage_gate
+from orchestration.tasks.coverage import awaiting_coverage, coverage_gate
 from orchestration.tasks.dbt_build import DIVIDEND_PHASES, INSIGHT_PHASES, dbt_build
 from orchestration.tasks.documents import extract_dividend_filings, land_dividend_attachments
 from orchestration.tasks.finalize import finalize_run
@@ -67,7 +67,7 @@ def _ingest_result(td: date, config: OrchestrationConfig) -> PhaseResult:
         manifests = _ingest_live(td)
 
     dated = [m for m in manifests if m["trade_date"] == td.isoformat()]
-    statuses = {m["status"] for m in dated}
+    statuses = {m["status"] for m in dated if not awaiting_coverage(m)}
     status = "FAILED" if "FAILED" in statuses else ("PARTIAL" if "PARTIAL" in statuses else "SUCCESS")
     anchor = dated[0]["ingest_run_id"] if dated else None
     return PhaseResult(
@@ -216,7 +216,14 @@ def gloomberg_daily_flow(trade_date: str | None = None) -> str:
             flow_run_id,
             td,
             "coverage_gate",
-            lambda: coverage_gate(ingest.payload, td, config.coverage_floor, config.coverage_hard_min),
+            lambda: coverage_gate(
+                ingest.payload,
+                td,
+                config.coverage_floor,
+                config.coverage_hard_min,
+                config.universe_min_securities,
+                config.calendar_seed,
+            ),
         )
         if not gate.payload:
             overall = "FAILED"  # below hard minimum; prior Gold stays live
