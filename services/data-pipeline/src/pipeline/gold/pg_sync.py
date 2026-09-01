@@ -22,7 +22,7 @@ def _agg_tables(con: duckdb.DuckDBPyConnection) -> list[str]:
 
 
 def sync(settings: Settings) -> list[str]:
-    """Replaces every agg_* table in Postgres from the built Gold, transactionally."""
+    """Rebuilds every agg_* table in Postgres from the built Gold, transactionally."""
     con = duckdb.connect()
     try:
         con.execute("INSTALL postgres; LOAD postgres;")
@@ -32,12 +32,9 @@ def sync(settings: Settings) -> list[str]:
 
         con.execute("BEGIN TRANSACTION")
         for table in tables:
-            con.execute(
-                f'CREATE TABLE IF NOT EXISTS pg.public."{table}" '
-                f'AS SELECT * FROM gold.main."{table}" WHERE false'
-            )
-            con.execute(f'DELETE FROM pg.public."{table}"')
-            con.execute(f'INSERT INTO pg.public."{table}" SELECT * FROM gold.main."{table}"')
+            # rebuilt from scratch, so a new Gold column never breaks the positional insert
+            con.execute(f'DROP TABLE IF EXISTS pg.public."{table}"')
+            con.execute(f'CREATE TABLE pg.public."{table}" AS SELECT * FROM gold.main."{table}"')
         con.execute("COMMIT")
         return tables
     finally:
