@@ -18,6 +18,7 @@ from app.agentic.deps import GraphDeps
 from app.agentic.graph import build_graph
 from app.agentic.nodes import ingest_context as ingest_context_mod
 from app.agentic.nodes._common import contains_advice, newest, value_confidence
+from app.agentic.nodes import evaluate as evaluate_node
 from app.agentic.nodes.evaluate import _advisory_text, _entities_resolved, _grounded
 from app.agentic.objectives import spec_for, spec_for_type
 from app.agentic.prompts.registry import get_prompt
@@ -1018,3 +1019,21 @@ def test_prescriptive_framing_still_fails_the_gate() -> None:
         "overweight banking",
     ):
         assert contains_advice(text) is True, text
+
+
+def test_net_foreign_flow_wording_is_description() -> None:
+    """The model writes flow as Net Foreign Buy, with the qualifier in the middle."""
+    for text in ("Net Foreign Sell", "Net Foreign Buy Rp30,66 Juta", "foreign net buy", "net asing"):
+        assert contains_advice(text) is False, text
+
+
+def test_one_bad_insight_subject_does_not_discard_the_others() -> None:
+    """An insight is per ticker, so a bad read on GOTO must not sink the other seven."""
+    graded = [{"passed": True}] * 6 + [{"passed": False}] * 2
+    assert evaluate_node._verdict("intraday_insight", graded, can_retry=True) == "ACCEPT"
+
+
+def test_every_insight_subject_failing_still_retries() -> None:
+    """Nothing landed for any ticker, so the retry is worth the tokens."""
+    graded = [{"passed": False}, {"passed": False}]
+    assert evaluate_node._verdict("intraday_insight", graded, can_retry=True) == "OPTIMIZE"

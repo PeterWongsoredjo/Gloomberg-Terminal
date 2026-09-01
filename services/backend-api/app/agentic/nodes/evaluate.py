@@ -130,7 +130,8 @@ def _checks(objective: str, draft: dict[str, Any], corp_tickers: set[str]) -> di
 _HARD_GATES = ("schema_valid", "grounded", "entities_resolved", "non_advisory", "context_consistent")
 
 # objectives whose drafts stand alone, so a good one lands even if a sibling fails
-_PARTIAL_ACCEPT = ("ARTICLE_SENTIMENT", "CASH_DIVIDEND")
+# one insight per ticker, so a bad read on one issuer must not discard the others
+_PARTIAL_ACCEPT = ("ARTICLE_SENTIMENT", "CASH_DIVIDEND", "INSIGHT")
 
 
 def _passed(checks: dict[str, Any]) -> bool:

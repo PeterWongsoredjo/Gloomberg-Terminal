@@ -19,8 +19,9 @@ _PRESCRIPTIVE = (
 )
 # how the market is described, not what anyone should do about it
 _DESCRIPTIVE = (
-    r"net\s*(?:buy|sell)(?:ing|er|ers)?|(?:beli|jual)\s*bersih|"
-    r"(?:minat|aksi|tekanan|volume|nilai|daya|kekuatan)\s*(?:beli|jual)|"
+    r"(?:foreign\s*)?net\s*(?:foreign\s*)?(?:buy|sell)(?:ing|er|ers)?|"
+    r"(?:beli|jual)\s*bersih|net\s*asing|asing\s*net\s*(?:buy|sell)|"
+    r"(?:minat|aksi|tekanan|volume|nilai|daya|kekuatan|arus)\s*(?:beli|jual)|"
     r"buying\s*interest|selling\s*pressure|buy\s*side|sell\s*side"
 )
 # the descriptive branch runs first, so it eats the wording before the advice branch sees it
