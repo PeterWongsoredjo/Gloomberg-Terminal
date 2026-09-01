@@ -11,15 +11,20 @@ from langchain_core.runnables import RunnableConfig
 from app.agentic.deps import GraphDeps
 from app.agentic.objectives import spec_for
 
-# prescriptive language the non-advisory gate rejects, in English and Indonesian
+# telling someone to trade, in English and Indonesian
 _PRESCRIPTIVE = (
     r"buy|sell|hold|accumulate|overweight|underweight|target\s*price|price\s*target|"
-    r"take\s*profit|cut\s*loss|beli|jual|akumulasi|rekomendasi"
+    r"take\s*profit|cut\s*loss|beli|jual|akumulasi|rekomendasi|disarankan|sebaiknya|"
+    r"layak\s*(?:beli|dibeli|dikoleksi)"
 )
-# net buying and net selling describe what foreign money did, they advise nothing
-_FLOW = r"net\s*(?:buy|sell)|(?:beli|jual)\s*bersih"
-# the flow branch is tried first, so it eats the wording before the advice branch sees it
-_ADVICE = re.compile(rf"\b(?:(?P<flow>{_FLOW})|(?P<advice>{_PRESCRIPTIVE}))\b", re.IGNORECASE)
+# how the market is described, not what anyone should do about it
+_DESCRIPTIVE = (
+    r"net\s*(?:buy|sell)(?:ing|er|ers)?|(?:beli|jual)\s*bersih|"
+    r"(?:minat|aksi|tekanan|volume|nilai|daya|kekuatan)\s*(?:beli|jual)|"
+    r"buying\s*interest|selling\s*pressure|buy\s*side|sell\s*side"
+)
+# the descriptive branch runs first, so it eats the wording before the advice branch sees it
+_ADVICE = re.compile(rf"\b(?:(?P<flow>{_DESCRIPTIVE})|(?P<advice>{_PRESCRIPTIVE}))\b", re.IGNORECASE)
 
 
 def get_deps(config: RunnableConfig) -> GraphDeps:

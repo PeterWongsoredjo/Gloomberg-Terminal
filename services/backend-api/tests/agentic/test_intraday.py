@@ -980,3 +980,41 @@ def test_real_advice_still_fails_the_gate() -> None:
     """Loosening the flow wording must not let a genuine call through."""
     for text in ("Buy BBRI now", "sell into strength", "rekomendasi beli", "target price 6000"):
         assert contains_advice(text) is True, text
+
+
+# the exact narrative the live model produced for BBRI, which the gate kept rejecting
+_LIVE_NARRATIVE = (
+    "IHSG mencatatkan penguatan sebesar 0,60% ke level 6.564,51 pada perdagangan sesi "
+    "pertama hari ini. Investor asing menunjukkan minat beli yang signifikan dengan "
+    "mencatatkan net buy hampir Rp1 triliun di pasar reguler."
+)
+
+
+def test_the_live_bbri_narrative_is_not_advice() -> None:
+    assert contains_advice(_LIVE_NARRATIVE) is False
+
+
+def test_descriptive_market_vocabulary_is_not_advice() -> None:
+    """Indonesian market prose uses beli and jual descriptively all the time."""
+    for text in (
+        "minat beli yang signifikan",
+        "aksi jual mendominasi",
+        "tekanan jual tinggi",
+        "volume beli naik",
+        "daya beli konsumen",
+        "buying interest was strong",
+        "selling pressure eased",
+    ):
+        assert contains_advice(text) is False, text
+
+
+def test_prescriptive_framing_still_fails_the_gate() -> None:
+    """Loosening descriptive wording must not let a recommendation through."""
+    for text in (
+        "investor disarankan beli saham ini",
+        "sebaiknya jual sekarang",
+        "saham ini layak dikoleksi",
+        "beli saham BBRI",
+        "overweight banking",
+    ):
+        assert contains_advice(text) is True, text
