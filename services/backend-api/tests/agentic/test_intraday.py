@@ -951,3 +951,32 @@ async def test_project_insight_upsert_is_freshest_wins() -> None:
     finally:
         await _purge(pool)
         await pool.close()
+
+
+# the regression: describing foreign flow rejected every insight that mentioned it
+def test_net_flow_wording_is_description_not_advice() -> None:
+    """Net buy and net sell are how IDX states foreign flow; they recommend nothing."""
+    for text in (
+        "Net buy asing hampir Rp1 triliun",
+        "net sell asing melebar",
+        "beli bersih investor asing",
+        "jual bersih asing",
+    ):
+        assert contains_advice(text) is False, text
+
+
+def test_a_flow_signal_no_longer_sinks_the_whole_insight() -> None:
+    """The exact shape the model returns for BBRI, which the gate used to reject."""
+    value = {
+        "headline": "BBRI menguat ditopang aliran dana asing",
+        "narrative": "BBRI naik pada perdagangan sesi pertama.",
+        "signals": [{"type": "FLOW", "value": "Net buy asing hampir Rp1 triliun"}],
+        "watchpoints": [],
+    }
+    assert contains_advice(_advisory_text("intraday_insight", value)) is False
+
+
+def test_real_advice_still_fails_the_gate() -> None:
+    """Loosening the flow wording must not let a genuine call through."""
+    for text in ("Buy BBRI now", "sell into strength", "rekomendasi beli", "target price 6000"):
+        assert contains_advice(text) is True, text

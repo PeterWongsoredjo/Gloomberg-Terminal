@@ -12,11 +12,14 @@ from app.agentic.deps import GraphDeps
 from app.agentic.objectives import spec_for
 
 # prescriptive language the non-advisory gate rejects, in English and Indonesian
-_ADVICE = re.compile(
-    r"\b(buy|sell|hold|accumulate|overweight|underweight|target\s*price|price\s*target|"
-    r"take\s*profit|cut\s*loss|beli|jual|akumulasi|rekomendasi)\b",
-    re.IGNORECASE,
+_PRESCRIPTIVE = (
+    r"buy|sell|hold|accumulate|overweight|underweight|target\s*price|price\s*target|"
+    r"take\s*profit|cut\s*loss|beli|jual|akumulasi|rekomendasi"
 )
+# net buying and net selling describe what foreign money did, they advise nothing
+_FLOW = r"net\s*(?:buy|sell)|(?:beli|jual)\s*bersih"
+# the flow branch is tried first, so it eats the wording before the advice branch sees it
+_ADVICE = re.compile(rf"\b(?:(?P<flow>{_FLOW})|(?P<advice>{_PRESCRIPTIVE}))\b", re.IGNORECASE)
 
 
 def get_deps(config: RunnableConfig) -> GraphDeps:
@@ -27,8 +30,8 @@ def get_deps(config: RunnableConfig) -> GraphDeps:
 
 
 def contains_advice(text: str) -> bool:
-    """True when the text uses prescriptive buy/sell/target language."""
-    return bool(_ADVICE.search(text or ""))
+    """True when the text tells someone to trade, not when it describes flow."""
+    return any(m.group("advice") for m in _ADVICE.finditer(text or ""))
 
 
 def news_for_ticker(news_items: list[dict[str, Any]], ticker: str) -> list[dict[str, Any]]:
