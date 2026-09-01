@@ -53,8 +53,12 @@ create table if not exists observability.obs_telemetry_rollup (
     low_confidence_artifact_count int not null default 0,
     live_prompt_versions jsonb not null default '{}'::jsonb,
     quality_flags jsonb not null default '[]'::jsonb,
+    insight_age_hours double precision,
     refreshed_at timestamptz not null default now()
 );
+
+alter table observability.obs_telemetry_rollup
+    add column if not exists insight_age_hours double precision;
 """
 
 
@@ -81,6 +85,7 @@ class RollupRow:
     breaker_state_groq: str | None = None
     breaker_state_gemini: str | None = None
     low_confidence_artifact_count: int = 0
+    insight_age_hours: float | None = None
     live_prompt_versions: dict[str, str] = field(default_factory=dict)
     quality_flags: list[str] = field(default_factory=list)
 
@@ -186,7 +191,7 @@ class RollupBuilder:
             "llm_runs": 0, "llm_runs_degraded": 0, "total_tokens": 0, "notional_cost": 0.0,
             "quota_pct_groq": 0.0, "quota_pct_gemini": 0.0,
             "breaker_state_groq": None, "breaker_state_gemini": None,
-            "low_confidence_artifact_count": 0,
+            "low_confidence_artifact_count": 0, "insight_age_hours": None,
         }
         runs = await self._safe_fetch(
             pool,
@@ -214,12 +219,32 @@ class RollupBuilder:
             if "LLM_LOW_CONFIDENCE" in _as_list(a["quality_flags"]):
                 measures["low_confidence_artifact_count"] += 1
 
-        await self._provider_health(pool, measures)
+        await self._insight_age(pool, trade_date, measures)
+        await self._provider_health(pool, trade_date, measures)
         return measures
 
-    async def _provider_health(self, pool: asyncpg.Pool, into: dict[str, Any]) -> None:
+    async def _insight_age(self, pool: asyncpg.Pool, trade_date: date, into: dict[str, Any]) -> None:
+        """How long since the newest insight landed, left as None when none ever did."""
+        rows = await self._safe_fetch(
+            pool,
+            """
+            select max(a.generated_at) as newest from agentic.agent_artifact a
+            join agentic.agent_run r on a.run_id = r.run_id
+            where r.trade_date = $1 and a.artifact_type = 'INSIGHT'
+            """,
+            trade_date,
+        )
+        newest = ensure_utc(rows[0]["newest"]) if rows and rows[0]["newest"] else None
+        if newest is not None:
+            into["insight_age_hours"] = (datetime.now(UTC) - newest).total_seconds() / 3600
+
+    async def _provider_health(self, pool: asyncpg.Pool, trade_date: date, into: dict[str, Any]) -> None:
         """reads model provider health metrics like circuit breaker status"""
-        rows = await self._safe_fetch(pool, "select provider, breaker_state, rpd_consumed from agentic.provider_health")
+        rows = await self._safe_fetch(
+            pool,
+            "select provider, breaker_state, rpd_consumed from agentic.provider_health where day = $1",
+            trade_date,
+        )
         health = {str(r["provider"]): r for r in rows}
         for provider in _PROVIDERS:
             record = health.get(provider)
@@ -245,6 +270,7 @@ class RollupBuilder:
             gold_promotion_ok=row.gold_promotion_ok,
             consumed_tokens=row.total_tokens or None,
             provider_quota={p: getattr(row, f"quota_pct_{p}") for p in _PROVIDERS},
+            insight_age_hours=row.insight_age_hours,
         )
 
     def _raise_alerts(self, breaches: list[Breach], row: RollupRow) -> list[Alert]:
@@ -266,6 +292,8 @@ class RollupBuilder:
                 flags.add("COVERAGE_GAP")
             if breach.measure == "data_as_of_age":
                 flags.add("STALE")
+            if breach.measure == "insight_age_hours":
+                flags.add("STALE")
         if row.quarantine_row_count:
             flags.add("SCHEMA_DRIFT_QUARANTINE")
         if row.low_confidence_artifact_count:
@@ -280,10 +308,11 @@ class RollupBuilder:
                 dbt_tests_passed, dbt_tests_failed, gold_promoted_at, gold_promotion_ok, data_as_of,
                 slo_breaches, active_alerts, llm_runs, llm_runs_degraded, total_tokens, notional_cost,
                 quota_pct_groq, quota_pct_gemini, breaker_state_groq, breaker_state_gemini,
-                low_confidence_artifact_count, live_prompt_versions, quality_flags, refreshed_at
+                low_confidence_artifact_count, live_prompt_versions, quality_flags,
+                insight_age_hours, refreshed_at
             ) values (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,
-                $21,$22::jsonb,$23::jsonb, now()
+                $21,$22::jsonb,$23::jsonb,$24, now()
             )
             on conflict (trade_date) do update set
                 session_state = excluded.session_state,
@@ -308,6 +337,7 @@ class RollupBuilder:
                 low_confidence_artifact_count = excluded.low_confidence_artifact_count,
                 live_prompt_versions = excluded.live_prompt_versions,
                 quality_flags = excluded.quality_flags,
+                insight_age_hours = excluded.insight_age_hours,
                 refreshed_at = now()
             """,
             row.trade_date, row.session_state, row.coverage_ratio, row.missing_ticker_count,
@@ -316,6 +346,7 @@ class RollupBuilder:
             row.llm_runs, row.llm_runs_degraded, row.total_tokens, row.notional_cost, row.quota_pct_groq,
             row.quota_pct_gemini, row.breaker_state_groq, row.breaker_state_gemini,
             row.low_confidence_artifact_count, json.dumps(row.live_prompt_versions), json.dumps(row.quality_flags),
+            row.insight_age_hours,
         )
 
     async def _safe_fetch(self, pool: asyncpg.Pool, query: str, *args: Any) -> list[asyncpg.Record]:

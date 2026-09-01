@@ -37,7 +37,6 @@ def build_slots(settings: AgenticSettings, clients: dict[str, object]) -> dict[s
     """wraps the LLM clients in a ProviderSlot (point 3)"""
     breaker_config = BreakerConfig(
         failure_threshold=settings.breaker_failure_threshold,
-        window_seconds=settings.breaker_window_seconds,
         cooldown_seconds=settings.breaker_cooldown_seconds,
     )
     slots: dict[str, ProviderSlot] = {}

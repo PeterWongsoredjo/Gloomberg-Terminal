@@ -42,3 +42,9 @@
   target: { max: 1.0 }
   calendar_aware: false
   severity: WARN
+- slo_id: insight_freshness
+  plane: LLM
+  measure: insight_age_hours
+  target: { max_hours: 3 }
+  calendar_aware: true
+  severity: ERROR

@@ -18,7 +18,6 @@ class CircuitBreaker:
         self._config = config
         self._clock = clock
         self._failures = 0
-        self._first_failure_at = 0.0
         self._opened_at = 0.0
         self._state: BreakerState = "CLOSED"
 
@@ -40,12 +39,8 @@ class CircuitBreaker:
         self._state = "CLOSED"
 
     def record_failure(self) -> None:
-        now = self._clock()
-        if self._failures == 0 or now - self._first_failure_at > self._config.window_seconds:
-            self._first_failure_at = now
-            self._failures = 1
-        else:
-            self._failures += 1
+        # counts consecutive failures, so an hourly flow can still trip this
+        self._failures += 1
         if self._state == "HALF_OPEN" or self._failures >= self._config.failure_threshold:
             self._state = "OPEN"
-            self._opened_at = now
+            self._opened_at = self._clock()

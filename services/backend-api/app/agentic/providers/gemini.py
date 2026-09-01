@@ -11,8 +11,8 @@ from google import genai
 from google.genai import errors, types
 
 from app.agentic.providers.base import (
-    ProviderError,
     ProviderRateLimited,
+    ProviderRejected,
     ProviderRequest,
     ProviderResponse,
     ProviderUnavailable,
@@ -57,7 +57,7 @@ class GeminiProvider:
         except errors.ClientError as exc:
             if exc.code == 429:
                 raise ProviderRateLimited(f"gemini 429: {exc}") from exc
-            raise ProviderError(f"gemini {exc.code}: {str(exc)[:160]}") from exc
+            raise ProviderRejected(f"gemini {exc.code}: {str(exc)[:160]}") from exc
         except errors.ServerError as exc:
             raise ProviderUnavailable(f"gemini {exc.code}") from exc
         except errors.APIError as exc:

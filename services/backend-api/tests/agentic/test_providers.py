@@ -9,6 +9,7 @@ import pytest
 
 from app.agentic.providers.base import (
     ProviderRateLimited,
+    ProviderRejected,
     ProviderRequest,
     ProviderUnavailable,
 )
@@ -36,7 +37,7 @@ def _request() -> ProviderRequest:
 def test_breaker_trips_after_threshold_and_recovers() -> None:
     """The breaker opens at the threshold, then half-opens after cooldown and closes."""
     clock = {"t": 0.0}
-    breaker = CircuitBreaker(BreakerConfig(3, 60, 120), clock=lambda: clock["t"])
+    breaker = CircuitBreaker(BreakerConfig(3, 120), clock=lambda: clock["t"])
     for _ in range(3):
         breaker.record_failure()
     assert str(breaker.state) == "OPEN"
@@ -51,13 +52,34 @@ def test_breaker_trips_after_threshold_and_recovers() -> None:
 def test_breaker_reopens_on_half_open_failure() -> None:
     """A failed half-open probe re-opens the breaker immediately."""
     clock = {"t": 0.0}
-    breaker = CircuitBreaker(BreakerConfig(2, 60, 60), clock=lambda: clock["t"])
+    breaker = CircuitBreaker(BreakerConfig(2, 60), clock=lambda: clock["t"])
     breaker.record_failure()
     breaker.record_failure()
     clock["t"] = 61.0
     assert str(breaker.state) == "HALF_OPEN"
     breaker.record_failure()
     assert str(breaker.state) == "OPEN"
+
+
+def test_breaker_trips_on_failures_spread_over_hours() -> None:
+    """An hourly flow fails once a run, and the breaker still has to notice."""
+    clock = {"t": 0.0}
+    breaker = CircuitBreaker(BreakerConfig(3, 120), clock=lambda: clock["t"])
+    for hour in range(3):
+        clock["t"] = hour * 3600.0
+        breaker.record_failure()
+    assert str(breaker.state) == "OPEN"
+
+
+def test_breaker_forgets_failures_after_a_success() -> None:
+    """A provider that recovers starts its failure count from scratch."""
+    breaker = CircuitBreaker(BreakerConfig(3, 120))
+    breaker.record_failure()
+    breaker.record_failure()
+    breaker.record_success()
+    breaker.record_failure()
+    assert breaker.failure_count == 1
+    assert str(breaker.state) == "CLOSED"
 
 
 async def test_pacer_blocks_when_bucket_empty() -> None:
@@ -138,6 +160,21 @@ async def test_ladder_substitutes_past_rate_limit() -> None:
     assert groq.breaker.failure_count == 1
 
 
+async def test_ladder_substitutes_past_a_permanent_4xx() -> None:
+    """A dead model or a bad key on the primary must still fall through to the fallback."""
+
+    def groq_400(_req: ProviderRequest) -> Any:
+        raise ProviderRejected("groq 400: model_decommissioned")
+
+    groq = make_slot(ScriptedProvider("groq", groq_400))
+    gemini = make_slot(ScriptedProvider("gemini", lambda _r: sentiment_response(provider="gemini")))
+    ladder = ProviderLadder([groq, gemini])
+
+    response = await ladder.complete(_request())
+    assert response.provider == "gemini"
+    assert groq.breaker.failure_count == 1
+
+
 async def test_ladder_all_down_raises() -> None:
     """When every provider is unavailable the ladder raises AllProvidersDown."""
 
@@ -147,6 +184,24 @@ async def test_ladder_all_down_raises() -> None:
     ladder = ProviderLadder([make_slot(ScriptedProvider("groq", dead)), make_slot(ScriptedProvider("gemini", dead))])
     with pytest.raises(AllProvidersDown):
         await ladder.complete(_request())
+
+
+async def test_ladder_names_every_provider_that_failed() -> None:
+    """Giving up has to say which provider failed and why, per provider."""
+
+    def groq_401(_req: ProviderRequest) -> Any:
+        raise ProviderRejected("groq 401: invalid_api_key")
+
+    def gemini_503(_req: ProviderRequest) -> Any:
+        raise ProviderUnavailable("gemini 503")
+
+    ladder = ProviderLadder(
+        [make_slot(ScriptedProvider("groq", groq_401)), make_slot(ScriptedProvider("gemini", gemini_503))]
+    )
+    with pytest.raises(AllProvidersDown) as caught:
+        await ladder.complete(_request())
+    assert "groq 401: invalid_api_key" in str(caught.value)
+    assert "gemini 503" in str(caught.value)
 
 
 async def test_groq_adapter_uses_json_object_mode() -> None:

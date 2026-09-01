@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 from app.observability.calendar import SessionCalendar
-from app.observability.slo.engine import SloEngine, SloSample
+from app.observability.slo.engine import Breach, SloEngine, SloSample
 
 _ENGINE = SloEngine()
 _CAL = SessionCalendar()
@@ -83,3 +83,39 @@ def test_provider_quota_breach_per_provider() -> None:
     sample = SloSample(trade_date=date(2026, 7, 3), provider_quota={"groq": 1.0, "gemini": 0.5})
     breaches = [b for b in _ENGINE.evaluate(sample) if b.slo_id == "provider_quota"]
     assert len(breaches) == 1 and breaches[0].provider == "groq"
+
+
+def _insight_breaches(sample: SloSample) -> list[Breach]:
+    return [b for b in _ENGINE.evaluate(sample) if b.slo_id == "insight_freshness"]
+
+
+# the outage this SLO exists to catch: a whole trading day with no insight at all
+def test_a_trading_day_with_no_insight_at_all_breaches() -> None:
+    midday = _CAL.open_datetime_utc(date(2026, 7, 3)) + timedelta(hours=4)
+    sample = SloSample(trade_date=date(2026, 7, 3), now_utc=midday, insight_age_hours=None)
+    breaches = _insight_breaches(sample)
+    assert breaches and breaches[0].severity == "ERROR"
+
+
+def test_a_stale_insight_breaches() -> None:
+    midday = _CAL.open_datetime_utc(date(2026, 7, 3)) + timedelta(hours=4)
+    sample = SloSample(trade_date=date(2026, 7, 3), now_utc=midday, insight_age_hours=19 * 24)
+    assert _insight_breaches(sample)
+
+
+def test_a_fresh_insight_meets_the_slo() -> None:
+    midday = _CAL.open_datetime_utc(date(2026, 7, 3)) + timedelta(hours=4)
+    sample = SloSample(trade_date=date(2026, 7, 3), now_utc=midday, insight_age_hours=0.5)
+    assert not _insight_breaches(sample)
+
+
+def test_no_insight_is_fine_before_the_market_owes_one() -> None:
+    just_open = _CAL.open_datetime_utc(date(2026, 7, 3)) + timedelta(minutes=30)
+    sample = SloSample(trade_date=date(2026, 7, 3), now_utc=just_open, insight_age_hours=None)
+    assert not _insight_breaches(sample)
+
+
+def test_a_quiet_weekend_never_wants_an_insight() -> None:
+    saturday = date(2026, 7, 4)
+    sample = SloSample(trade_date=saturday, now_utc=datetime(2026, 7, 4, 12, tzinfo=UTC), insight_age_hours=None)
+    assert not _insight_breaches(sample)

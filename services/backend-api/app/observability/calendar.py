@@ -95,6 +95,12 @@ class SessionCalendar:
         wib_close = datetime.combine(day, self.template_for(day).close_time)
         return (wib_close - self._offset).replace(tzinfo=UTC)
 
+    def open_datetime_utc(self, day: date) -> datetime:
+        """When real trading starts, so in-session checks do not fire before the bell."""
+        phases = self.template_for(day).phases
+        first = next((p for p in phases if p.phase is SessionPhase.SESSION_1), phases[0])
+        return (datetime.combine(day, first.start) - self._offset).replace(tzinfo=UTC)
+
     def eod_freshness_minutes(self, day: date) -> int:
         return self.template_for(day).eod_freshness_minutes
 

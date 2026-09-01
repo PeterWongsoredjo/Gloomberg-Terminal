@@ -24,6 +24,7 @@ class SloSample:
     consumed_tokens: int | None = None
     run_id: str | None = None
     provider_quota: dict[str, float] = field(default_factory=dict)  # provider -> quota_pct
+    insight_age_hours: float | None = None  # None means the day has produced no insight at all
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class SloEngine:
             "run_latency_ms": self._check_latency,
             "consumed_tokens": self._check_tokens,
             "quota_pct": self._check_quota,
+            "insight_age_hours": self._check_insight,
         }.get(rule.measure)
         return handler(rule, sample) if handler else []
 
@@ -128,4 +130,17 @@ class SloEngine:
             if pct >= ceiling:
                 breaches.append(Breach(rule.slo_id, rule.severity, rule.measure, pct, ceiling, provider=provider))
         return breaches
+
+    def _check_insight(self, rule: SloRule, sample: SloSample) -> list[Breach]:
+        """An open trading day that has produced no fresh insight means the leg is down."""
+        if rule.calendar_aware and not self._calendar.is_trading_day(sample.trade_date):
+            return []
+        cap = float(rule.target["max_hours"])
+        # stay silent until the market has been open long enough to owe us one
+        due_at = self._calendar.open_datetime_utc(sample.trade_date) + timedelta(hours=cap)
+        if sample.now_utc < due_at:
+            return []
+        if sample.insight_age_hours is not None and sample.insight_age_hours <= cap:
+            return []
+        return [Breach(rule.slo_id, rule.severity, rule.measure, sample.insight_age_hours, cap)]
 

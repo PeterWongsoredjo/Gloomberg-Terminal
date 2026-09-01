@@ -16,6 +16,9 @@ import asyncpg
 
 from app.agentic.schemas import Ct009Artifact
 
+# the trading day in Jakarta time, the only day a quota counter belongs to
+_WIB_DAY = "(now() at time zone 'Asia/Jakarta')::date"
+
 _DDL = """
 create schema if not exists agentic;
 
@@ -51,15 +54,41 @@ create table if not exists agentic.agent_artifact (
 );
 
 create table if not exists agentic.provider_health (
-    provider text primary key,
+    provider text not null,
+    day date not null default (now() at time zone 'Asia/Jakarta')::date,
     breaker_state text not null,
     consecutive_failures int not null default 0,
     rpd_consumed int not null default 0,
     tpd_consumed bigint not null default 0,
-    updated_at timestamptz not null default now()
+    updated_at timestamptz not null default now(),
+    primary key (provider, day)
 );
 
 alter table agentic.provider_health add column if not exists tpd_consumed bigint not null default 0;
+alter table agentic.provider_health add column if not exists day date;
+
+-- a health row counts one provider's spend on one day, never all of history
+do $$
+declare
+    pkey text;
+begin
+    -- an older row keeps the day it was really written, never today
+    update agentic.provider_health
+    set day = (updated_at at time zone 'Asia/Jakarta')::date
+    where day is null;
+
+    alter table agentic.provider_health alter column day set not null;
+    alter table agentic.provider_health
+        alter column day set default (now() at time zone 'Asia/Jakarta')::date;
+
+    select conname into pkey from pg_constraint
+    where conrelid = 'agentic.provider_health'::regclass
+      and contype = 'p' and array_length(conkey, 1) = 1;
+    if pkey is not null then
+        execute format('alter table agentic.provider_health drop constraint %I', pkey);
+        alter table agentic.provider_health add primary key (provider, day);
+    end if;
+end $$;
 
 create table if not exists agentic.artifact_cache (
     cache_key text primary key,
@@ -165,11 +194,11 @@ async def record_provider_health(
     tpd_consumed: int,
 ) -> None:
     await pool.execute(
-        """
+        f"""
         insert into agentic.provider_health
-            (provider, breaker_state, consecutive_failures, rpd_consumed, tpd_consumed, updated_at)
-        values ($1, $2, $3, $4, $5, now())
-        on conflict (provider) do update set
+            (provider, day, breaker_state, consecutive_failures, rpd_consumed, tpd_consumed, updated_at)
+        values ($1, {_WIB_DAY}, $2, $3, $4, $5, now())
+        on conflict (provider, day) do update set
             breaker_state = excluded.breaker_state,
             consecutive_failures = excluded.consecutive_failures,
             rpd_consumed = excluded.rpd_consumed,
@@ -186,5 +215,7 @@ async def record_provider_health(
 
 async def read_provider_consumption(pool: asyncpg.Pool) -> dict[str, tuple[int, int]]:
     """Today's stored (requests, tokens) per provider, to reseed the quota tracker on boot."""
-    rows = await pool.fetch("select provider, rpd_consumed, tpd_consumed from agentic.provider_health")
+    rows = await pool.fetch(
+        f"select provider, rpd_consumed, tpd_consumed from agentic.provider_health where day = {_WIB_DAY}"
+    )
     return {str(r["provider"]): (int(r["rpd_consumed"]), int(r["tpd_consumed"])) for r in rows}

@@ -61,3 +61,10 @@
   cooldown_minutes: 15
   route: [telemetry_panel, operator_log]
   payload_includes: [source, silent_seconds]
+- alert_id: insight_leg_stale
+  source: "slo:insight_freshness"
+  severity: ERROR
+  dedup_key: "insight:{trade_date}"
+  cooldown_minutes: 60
+  route: [telemetry_panel, operator_log]
+  payload_includes: [trade_date, insight_age_hours]

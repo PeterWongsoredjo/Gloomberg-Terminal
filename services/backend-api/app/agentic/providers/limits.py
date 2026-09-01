@@ -16,8 +16,7 @@ class RateLimits:
 
 @dataclass(frozen=True)
 class BreakerConfig:
-    failure_threshold: int
-    window_seconds: float
+    failure_threshold: int      # consecutive failures that open the breaker
     cooldown_seconds: float
 
 # conservative free-tier seeds, a deploy overrides these with current published limits

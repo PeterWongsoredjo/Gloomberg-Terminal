@@ -16,7 +16,7 @@ def parse_json_object(text: str) -> dict[str, Any] | None:
 
 
 class ProviderError(Exception):
-    """A permanent provider failure, do not retry or cross-substitute on this."""
+    """A failure scoped to one provider, so the ladder tries the next one."""
 
 
 class ProviderRateLimited(ProviderError):
@@ -25,6 +25,10 @@ class ProviderRateLimited(ProviderError):
 
 class ProviderUnavailable(ProviderError):
     """A 5xx, timeout, or connection error; retryable and breaker-counted."""
+
+
+class ProviderRejected(ProviderError):
+    """A 4xx that is permanent for this provider, like a dead model or a bad key."""
 
 
 @dataclass

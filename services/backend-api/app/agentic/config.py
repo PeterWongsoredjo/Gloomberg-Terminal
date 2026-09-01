@@ -30,8 +30,8 @@ class AgenticSettings(BaseSettings):
     postgres_password: str = Field(default="", validation_alias="POSTGRES_PASSWORD")
     postgres_db: str = Field(default="gloomberg", validation_alias="POSTGRES_DB")
 
+    # providers retire models often, override with GROQ_MODEL or GEMINI_MODEL to re-pin
     groq_model: str = "llama-3.3-70b-versatile"
-    groq_fallback_model: str = "llama-3.1-8b-instant"
     # 2.5-flash-lite was retired for new users mid-2026, pin its stable successor
     gemini_model: str = "gemini-3.1-flash-lite"
 
@@ -46,7 +46,6 @@ class AgenticSettings(BaseSettings):
 
     # circuit breaker
     breaker_failure_threshold: int = 5
-    breaker_window_seconds: float = 60.0
     breaker_cooldown_seconds: float = 120.0
 
     # intraday scoring gives up on an item after this many runs

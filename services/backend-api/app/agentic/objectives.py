@@ -51,10 +51,10 @@ OBJECTIVES: dict[str, ObjectiveSpec] = {
         "deep_extract", "extraction_confidence_gate",
     ),
     "insight_synthesis": ObjectiveSpec(
-        "insight_synthesis", "INSIGHT", InsightValue, ("groq", "gemini"), "synthesize_insight", "insight_confidence_gate"
+        "insight_synthesis", "INSIGHT", InsightValue, ("gemini", "groq"), "synthesize_insight", "insight_confidence_gate"
     ),
     "intraday_insight": ObjectiveSpec(
-        "intraday_insight", "INSIGHT", InsightValue, ("groq", "gemini"), "synthesize_insight", "insight_confidence_gate"
+        "intraday_insight", "INSIGHT", InsightValue, ("gemini", "groq"), "synthesize_insight", "insight_confidence_gate"
     ),
 }
 

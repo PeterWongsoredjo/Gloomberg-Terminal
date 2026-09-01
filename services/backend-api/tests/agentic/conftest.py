@@ -117,7 +117,7 @@ def article_batch_response(
 
 def make_slot(provider: ScriptedProvider) -> ProviderSlot:
     """Wraps a scripted provider with a real breaker and a fast pacer."""
-    return ProviderSlot(provider, CircuitBreaker(BreakerConfig(5, 60, 120)), RatePacer(100000))
+    return ProviderSlot(provider, CircuitBreaker(BreakerConfig(5, 120)), RatePacer(100000))
 
 
 @pytest.fixture

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from app.agentic.providers.base import (
     ProviderError,
-    ProviderRateLimited,
     ProviderRequest,
     ProviderResponse,
     ProviderSlot,
@@ -35,25 +34,26 @@ class ProviderLadder:
         return self._slots[0].provider.name if self._slots else "none"
 
     async def complete(self, request: ProviderRequest) -> ProviderResponse:
-        attempted = False
+        """Tries each provider in turn, giving up only when every one is spent."""
+        reasons: list[str] = []
         for slot in self._slots:
             name = slot.provider.name
             if not slot.breaker.allow():
+                reasons.append(f"{name}: breaker open")
                 continue
             if self._quota is not None and self._quota.exhausted(name):
+                reasons.append(f"{name}: quota exhausted")
                 continue
-            attempted = True
             await slot.pacer.acquire(request.estimated_tokens)
             try:
                 response = await slot.provider.complete(request)
-            except (ProviderRateLimited, ProviderUnavailable):
+            except ProviderError as exc:
+                # one provider being broken is never a reason to skip the others
                 slot.breaker.record_failure()
+                reasons.append(f"{name}: {exc}")
                 continue
-            except ProviderError:
-                slot.breaker.record_failure()
-                raise
             slot.breaker.record_success()
             if self._quota is not None:
                 self._quota.record(name, requests=1, tokens=response.prompt_tokens + response.completion_tokens)
             return response
-        raise AllProvidersDown("no live provider available" if attempted else "all breakers open or quota-exhausted")
+        raise AllProvidersDown("; ".join(reasons) if reasons else "no providers configured")
