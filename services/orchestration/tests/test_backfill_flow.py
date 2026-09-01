@@ -26,7 +26,6 @@ def _config(tmp_path: Path) -> OrchestrationConfig:
         poll_interval_seconds=0.0,
         poll_timeout_seconds=1.0,
         trigger_timeout_seconds=1.0,
-        eod_cron="0 17 * * 1-5",
     )
 
 

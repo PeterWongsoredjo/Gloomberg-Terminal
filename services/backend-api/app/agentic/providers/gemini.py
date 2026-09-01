@@ -1,5 +1,5 @@
 """
-Gemini adapter (2.5 Flash-Lite)
+Gemini adapter, the model is pinned by config
 """
 
 from __future__ import annotations

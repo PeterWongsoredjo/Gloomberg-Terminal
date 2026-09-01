@@ -1,5 +1,5 @@
 """
-Groq adapter (Llama 3.3 70B)
+Groq adapter, the model is pinned by config
 """
 
 from __future__ import annotations

@@ -31,7 +31,8 @@ class AgenticSettings(BaseSettings):
     postgres_db: str = Field(default="gloomberg", validation_alias="POSTGRES_DB")
 
     # providers retire models often, override with GROQ_MODEL or GEMINI_MODEL to re-pin
-    groq_model: str = "llama-3.3-70b-versatile"
+    # groq dropped the whole llama chat line in 2026, this is the pinned replacement
+    groq_model: str = "qwen/qwen3.8-27b"
     # 2.5-flash-lite was retired for new users mid-2026, pin its stable successor
     gemini_model: str = "gemini-3.1-flash-lite"
 

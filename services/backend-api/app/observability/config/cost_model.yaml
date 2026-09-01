@@ -2,7 +2,8 @@ currency: USD
 effective_from: "2026-07-01"
 providers:
   groq:
-    model: llama-3.3-70b-versatile
+    # prices below are the retired llama-3.3-70b rates, recheck them for this model
+    model: qwen/qwen3.8-27b
     list_price:
       prompt_per_1k: 0.00059
       completion_per_1k: 0.00079
@@ -10,7 +11,7 @@ providers:
       rpd: 1000
       tpd: 500000
   gemini:
-    model: gemini-2.5-flash-lite
+    model: gemini-3.1-flash-lite
     list_price:
       prompt_per_1k: 0.00010
       completion_per_1k: 0.00040

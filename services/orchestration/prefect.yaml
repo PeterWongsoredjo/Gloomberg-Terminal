@@ -13,7 +13,7 @@ deployments:
     work_pool:
       name: gloomberg-local        # concurrency limits set by setup_prefect.py
     schedules:
-      - cron: "0 17 * * 1-5"        # WIB EOD buffer past the close, guard skips holidays
+      - cron: "45 17 * * 1-5"       # IDX publishes the day well after 16:00, and this clears the 18:00 resweep
         timezone: "Asia/Jakarta"
 
   - name: gloomberg-intraday-news
@@ -42,7 +42,7 @@ deployments:
     work_pool:
       name: gloomberg-local
     schedules:
-      - cron: "0 18-23 * * 1-5"     # six independent windows after the 17:00 EOD run
+      - cron: "0 18-23 * * 1-5"     # six independent windows after the 17:45 EOD run
         timezone: "Asia/Jakarta"
 
   - name: gloomberg-backfill

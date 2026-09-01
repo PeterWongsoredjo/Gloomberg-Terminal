@@ -27,7 +27,6 @@ class OrchestrationConfig:
     poll_interval_seconds: float
     poll_timeout_seconds: float
     trigger_timeout_seconds: float
-    eod_cron: str
     # below this an IDX profile payload is broken, not a small market
     universe_min_securities: int = MIN_PLAUSIBLE_SECURITIES
     session_windows: Path = REPO_ROOT / "services" / "backend-api" / "app" / "observability" / "config" / "session_windows.yaml"
@@ -63,7 +62,6 @@ def get_config() -> OrchestrationConfig:
         poll_interval_seconds=float(os.environ.get("GLOOMBERG_ORCH_POLL_INTERVAL", "5")),
         poll_timeout_seconds=float(os.environ.get("GLOOMBERG_ORCH_POLL_TIMEOUT", "600")),
         trigger_timeout_seconds=float(os.environ.get("GLOOMBERG_ORCH_TRIGGER_TIMEOUT", "10")),
-        eod_cron=os.environ.get("GLOOMBERG_ORCH_EOD_CRON", "0 17 * * 1-5"),
         session_windows=Path(
             os.environ.get(
                 "GLOOMBERG_ORCH_SESSION_WINDOWS",
