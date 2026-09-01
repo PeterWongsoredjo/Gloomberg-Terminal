@@ -11,18 +11,21 @@ from langchain_core.runnables import RunnableConfig
 from app.agentic.deps import GraphDeps
 from app.agentic.objectives import spec_for
 
-# telling someone to trade, in English and Indonesian
+# telling someone to trade, which is the framing word and not the trade verb
 _PRESCRIPTIVE = (
-    r"buy|sell|hold|accumulate|overweight|underweight|target\s*price|price\s*target|"
-    r"take\s*profit|cut\s*loss|beli|jual|akumulasi|rekomendasi|disarankan|sebaiknya|"
-    r"layak\s*(?:beli|dibeli|dikoleksi)"
+    r"hold|accumulate|overweight|underweight|target\s*price|price\s*target|"
+    r"take\s*profit|cut\s*loss|akumulasi|rekomendasi|disarankan|sebaiknya|"
+    r"layak\s*(?:beli|dibeli|dikoleksi)|"
+    # an order names what to trade: a ticker, or the thing in front of you
+    r"(?:beli|jual|buy|sell)\s+(?-i:[A-Z]{4})|"
+    r"(?:buy|sell)\s+(?:this|that|these|those|your|it|now)|"
+    r"(?:beli|jual)\s+(?:ini|itu|sekarang|saham\s+ini)"
 )
-# how the market is described, not what anyone should do about it
+# flow and accumulation wording that names who did it, never a call to act
 _DESCRIPTIVE = (
     r"(?:foreign\s*)?net\s*(?:foreign\s*)?(?:buy|sell)(?:ing|er|ers)?|"
-    r"(?:beli|jual)\s*bersih|net\s*asing|asing\s*net\s*(?:buy|sell)|"
-    r"(?:minat|aksi|tekanan|volume|nilai|daya|kekuatan|arus)\s*(?:beli|jual)|"
-    r"buying\s*interest|selling\s*pressure|buy\s*side|sell\s*side"
+    r"asing\s*net\s*(?:buy|sell)|"
+    r"akumulasi\s*(?:investor|asing|dana|institusi|pemodal|saham)"
 )
 # the descriptive branch runs first, so it eats the wording before the advice branch sees it
 _ADVICE = re.compile(rf"\b(?:(?P<flow>{_DESCRIPTIVE})|(?P<advice>{_PRESCRIPTIVE}))\b", re.IGNORECASE)

@@ -106,6 +106,15 @@ def _subject_rows(state: AgentState) -> list[dict[str, Any]]:
     ]
 
 
+def _correction_for(state: AgentState, ticker: str | None) -> list[str]:
+    """The gates this subject's own last draft failed, so a retry fixes its own mistake."""
+    for draft in state["working"].get("draft_artifacts", []):
+        if (draft.get("subject") or {}).get("ticker") != ticker or draft.get("passed", True):
+            continue
+        return sorted(g for g, ok in (draft.get("checks") or {}).items() if ok is False)
+    return []
+
+
 def _tasks(state: AgentState, settings: AgenticSettings) -> list[dict[str, Any]]:
     objective = state["objective"]
     context = state["context"]
@@ -132,7 +141,7 @@ def _tasks(state: AgentState, settings: AgenticSettings) -> list[dict[str, Any]]
             "subject": {"ticker": row["ticker"], "security_id": row.get("security_id")},
             "market_context": row,
             "news_items": news,
-            "correction": correction,
+            "correction": _correction_for(state, row["ticker"]),
         }
         tasks.append(
             {

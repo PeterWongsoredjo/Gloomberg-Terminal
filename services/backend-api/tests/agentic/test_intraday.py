@@ -18,6 +18,7 @@ from app.agentic.deps import GraphDeps
 from app.agentic.graph import build_graph
 from app.agentic.nodes import ingest_context as ingest_context_mod
 from app.agentic.nodes._common import contains_advice, newest, value_confidence
+from app.agentic.nodes.analysis import _correction_for
 from app.agentic.nodes import evaluate as evaluate_node
 from app.agentic.nodes.evaluate import _advisory_text, _entities_resolved, _grounded
 from app.agentic.objectives import spec_for, spec_for_type
@@ -954,81 +955,67 @@ async def test_project_insight_upsert_is_freshest_wins() -> None:
         await pool.close()
 
 
-# the regression: describing foreign flow rejected every insight that mentioned it
-def test_net_flow_wording_is_description_not_advice() -> None:
-    """Net buy and net sell are how IDX states foreign flow; they recommend nothing."""
+# the gate targets recommendations, so market vocabulary has to travel freely
+def test_market_vocabulary_is_not_advice() -> None:
+    """Real wording from a full 51 ticker sweep, all of it descriptive."""
     for text in (
-        "Net buy asing hampir Rp1 triliun",
-        "net sell asing melebar",
-        "beli bersih investor asing",
-        "jual bersih asing",
+        "Net Foreign Buy BBRI is 60 juta",
+        "Net Foreign Sell BBRI 60 juta",
+        "asing net buy BBRI",
+        "Net Foreign Buy Rp30,66 Juta",
+        "akumulasi investor asing berlanjut",
+        "antusiasme beli pada saham berkapitalisasi besar",
+        "minat beli yang signifikan",
+        "tekanan jual tinggi",
+        "Sell pressure on BBRI is high",
+        "asing membeli terus",
+        "pembelian oleh asing meningkat",
     ):
         assert contains_advice(text) is False, text
 
 
-def test_a_flow_signal_no_longer_sinks_the_whole_insight() -> None:
-    """The exact shape the model returns for BBRI, which the gate used to reject."""
+def test_a_recommendation_still_fails_the_gate() -> None:
+    """Prescriptive force lives in the framing word, and that is what must be caught."""
+    for text in (
+        "rekomendasi beli",
+        "investor disarankan beli saham ini",
+        "sebaiknya jual sekarang",
+        "saham ini layak dikoleksi",
+        "target price 6000",
+        "take profit",
+        "cut loss",
+        "hold your position",
+        "overweight banking",
+        "lakukan akumulasi",
+    ):
+        assert contains_advice(text) is True, text
+
+
+def test_a_bare_order_naming_a_ticker_is_advice() -> None:
+    """Dropping the trade verbs leaves the imperative, which the ticker catches."""
+    for text in ("Beli BBRI sekarang", "Buy BBRI now", "Jual TLKM segera"):
+        assert contains_advice(text) is True, text
+
+
+def test_the_ticker_rule_stays_case_sensitive() -> None:
+    """An unscoped [A-Z]{4} under IGNORECASE would match any four letters."""
+    assert contains_advice("antusiasme beli pada saham") is False
+    assert contains_advice("beli pada") is False
+
+
+def test_flow_wording_is_eaten_before_the_ticker_rule_sees_it() -> None:
+    """Net Foreign Buy BBRI must not read as an order to buy BBRI."""
     value = {
         "headline": "BBRI menguat ditopang aliran dana asing",
-        "narrative": "BBRI naik pada perdagangan sesi pertama.",
-        "signals": [{"type": "FLOW", "value": "Net buy asing hampir Rp1 triliun"}],
+        "narrative": "Investor asing menunjukkan minat beli yang signifikan.",
+        "signals": [{"type": "FLOW", "value": "Net Foreign Buy BBRI is 60 juta"}],
         "watchpoints": [],
     }
     assert contains_advice(_advisory_text("intraday_insight", value)) is False
 
 
-def test_real_advice_still_fails_the_gate() -> None:
-    """Loosening the flow wording must not let a genuine call through."""
-    for text in ("Buy BBRI now", "sell into strength", "rekomendasi beli", "target price 6000"):
-        assert contains_advice(text) is True, text
-
-
-# the exact narrative the live model produced for BBRI, which the gate kept rejecting
-_LIVE_NARRATIVE = (
-    "IHSG mencatatkan penguatan sebesar 0,60% ke level 6.564,51 pada perdagangan sesi "
-    "pertama hari ini. Investor asing menunjukkan minat beli yang signifikan dengan "
-    "mencatatkan net buy hampir Rp1 triliun di pasar reguler."
-)
-
-
-def test_the_live_bbri_narrative_is_not_advice() -> None:
-    assert contains_advice(_LIVE_NARRATIVE) is False
-
-
-def test_descriptive_market_vocabulary_is_not_advice() -> None:
-    """Indonesian market prose uses beli and jual descriptively all the time."""
-    for text in (
-        "minat beli yang signifikan",
-        "aksi jual mendominasi",
-        "tekanan jual tinggi",
-        "volume beli naik",
-        "daya beli konsumen",
-        "buying interest was strong",
-        "selling pressure eased",
-    ):
-        assert contains_advice(text) is False, text
-
-
-def test_prescriptive_framing_still_fails_the_gate() -> None:
-    """Loosening descriptive wording must not let a recommendation through."""
-    for text in (
-        "investor disarankan beli saham ini",
-        "sebaiknya jual sekarang",
-        "saham ini layak dikoleksi",
-        "beli saham BBRI",
-        "overweight banking",
-    ):
-        assert contains_advice(text) is True, text
-
-
-def test_net_foreign_flow_wording_is_description() -> None:
-    """The model writes flow as Net Foreign Buy, with the qualifier in the middle."""
-    for text in ("Net Foreign Sell", "Net Foreign Buy Rp30,66 Juta", "foreign net buy", "net asing"):
-        assert contains_advice(text) is False, text
-
-
 def test_one_bad_insight_subject_does_not_discard_the_others() -> None:
-    """An insight is per ticker, so a bad read on GOTO must not sink the other seven."""
+    """An insight is per ticker, so a bad read on one issuer must not sink the rest."""
     graded = [{"passed": True}] * 6 + [{"passed": False}] * 2
     assert evaluate_node._verdict("intraday_insight", graded, can_retry=True) == "ACCEPT"
 
@@ -1037,3 +1024,34 @@ def test_every_insight_subject_failing_still_retries() -> None:
     """Nothing landed for any ticker, so the retry is worth the tokens."""
     graded = [{"passed": False}, {"passed": False}]
     assert evaluate_node._verdict("intraday_insight", graded, can_retry=True) == "OPTIMIZE"
+
+
+def _graded_state(drafts: list[dict[str, Any]]) -> Any:
+    return {"working": {"draft_artifacts": drafts}}
+
+
+def test_a_correction_carries_only_that_tickers_own_failures() -> None:
+    """BBRI must never be told to fix what BYAN got wrong."""
+    state = _graded_state([
+        {"subject": {"ticker": "BBRI"}, "passed": True, "checks": {"non_advisory": True}},
+        {"subject": {"ticker": "BYAN"}, "passed": False,
+         "checks": {"non_advisory": False, "schema_valid": True, "confidence_calibrated": 0.9}},
+    ])
+    assert _correction_for(state, "BYAN") == ["non_advisory"]
+    assert _correction_for(state, "BBRI") == []
+
+
+def test_the_first_pass_carries_no_correction() -> None:
+    """Nothing has been graded yet, so every subject starts clean."""
+    assert _correction_for(_graded_state([]), "BBRI") == []
+
+
+def test_a_bare_order_without_a_ticker_is_still_advice() -> None:
+    """An imperative names its object, so the demonstrative is the tell."""
+    for text in ("buy this stock now", "sell your position", "beli saham ini", "jual sekarang"):
+        assert contains_advice(text) is True, text
+
+
+def test_a_demonstrative_after_flow_wording_is_not_an_order() -> None:
+    """Net Foreign Buy this week reads as flow, not as buy this."""
+    assert contains_advice("Net Foreign Buy this week") is False
