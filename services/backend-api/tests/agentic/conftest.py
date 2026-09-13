@@ -1,4 +1,4 @@
-"""Shared fixtures for the agentic suite: an in-memory Gold, scripted providers, and deps.
+"""Shared fixtures for the agentic suite: a file-backed Gold, scripted providers, and deps.
 
 Everything here is deterministic and offline. The scripted provider stands in for a live LLM so
 every fault path (rate limit, malformed output, outage) is reproducible without a network call.
@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import duckdb
@@ -25,6 +26,7 @@ from app.agentic.providers.base import ProviderRequest, ProviderResponse, Provid
 from app.agentic.providers.breaker import CircuitBreaker
 from app.agentic.providers.limits import BreakerConfig
 from app.agentic.providers.pacer import RatePacer
+from app.core.snapshot import GoldSnapshot
 
 Responder = Callable[[ProviderRequest], ProviderResponse]
 
@@ -121,9 +123,10 @@ def make_slot(provider: ScriptedProvider) -> ProviderSlot:
 
 
 @pytest.fixture
-def gold_conn() -> duckdb.DuckDBPyConnection:
-    """An in-memory Gold snapshot with three securities, a split, and news."""
-    con = duckdb.connect()
+def gold_conn(tmp_path: Path) -> Iterator[GoldSnapshot]:
+    """A file-backed Gold snapshot with three securities, a split, and news."""
+    path = tmp_path / "gold.duckdb"
+    con = duckdb.connect(str(path))
     con.execute(
         "create table dim_security(security_id bigint, ticker varchar, board varchar, "
         "is_fca boolean, sector_idxic varchar, special_notation varchar[], is_current boolean)"
@@ -165,12 +168,15 @@ def gold_conn() -> duckdb.DuckDBPyConnection:
         "('news:1','2026-07-03','cnbc','id','BBCA split','BBCA melakukan stock split','http://x','2026-07-03 02:00:00',['BBCA']),"
         "('news:2','2026-07-03','kontan','id','BBRI asing jual','asing net sell BBRI','http://y','2026-07-03 02:00:00',['BBRI'])"
     )
-    return con
+    con.close()
+    snapshot = GoldSnapshot(str(path))
+    yield snapshot
+    snapshot.close()
 
 
 @pytest.fixture
-def deps_factory(gold_conn: duckdb.DuckDBPyConnection) -> Callable[..., GraphDeps]:
-    """Returns a builder for GraphDeps over the in-memory Gold, with given slots."""
+def deps_factory(gold_conn: GoldSnapshot) -> Callable[..., GraphDeps]:
+    """Returns a builder for GraphDeps over the file-backed Gold, with given slots."""
 
     def build(slots: dict[str, ProviderSlot], tracer: Any | None = None) -> GraphDeps:
         return GraphDeps(

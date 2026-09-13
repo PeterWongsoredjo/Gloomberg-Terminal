@@ -12,20 +12,20 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 import asyncpg
-import duckdb
 
 from app.agentic.config import AgenticSettings
 from app.agentic.objectives import spec_for
 from app.agentic.providers.base import ProviderSlot, QuotaGuard
 from app.agentic.providers.ladder import ProviderLadder
 from app.agentic.tracing import Tracer
+from app.core.snapshot import GoldSnapshot
 
 
 @dataclass
 class GraphDeps:
     slots: dict[str, ProviderSlot]
     pg_pool: asyncpg.Pool | None
-    duckdb_ro: duckdb.DuckDBPyConnection | None
+    duckdb_ro: GoldSnapshot | None
     settings: AgenticSettings
     tracer: Tracer
     quota: QuotaGuard | None = None

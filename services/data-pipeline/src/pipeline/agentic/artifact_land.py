@@ -11,7 +11,7 @@ from typing import Any
 import duckdb
 from minio import Minio
 
-from pipeline.bronze.ingest import client, land_payloads
+from pipeline.bronze.ingest import client, ingest_dates, land_payloads
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
@@ -64,6 +64,23 @@ def _row_to_artifact(row: tuple[Any, ...]) -> dict[str, Any]:
         "prompt_version": row[12],
         "generated_at": generated_at.isoformat() if hasattr(generated_at, "isoformat") else generated_at,
     }
+
+
+def _ledger_dates(settings: Settings) -> set[date]:
+    """Every day the agent ledger holds an artifact for."""
+    con = duckdb.connect()
+    try:
+        con.execute("INSTALL postgres; LOAD postgres;")
+        con.execute(f"ATTACH '{settings.postgres_dsn}' AS pg (TYPE postgres, READ_ONLY)")
+        rows = con.execute("select distinct window_from from pg.agentic.agent_artifact").fetchall()
+    finally:
+        con.close()
+    return {r[0] for r in rows}
+
+
+def unlanded_dates(minio: Minio, settings: Settings) -> list[date]:
+    """Days the agent scored but whose artifacts never reached Bronze."""
+    return sorted(_ledger_dates(settings) - ingest_dates(minio, "agent_artifact/"))
 
 
 def land_artifacts(minio: Minio, trade_date: date, settings: Settings) -> list[dict[str, Any]]:

@@ -63,6 +63,20 @@ def read_object(minio: Minio, key: str) -> bytes:
         response.release_conn()
 
 
+def ingest_dates(minio: Minio, prefix: str) -> set[date]:
+    """Which days already have objects under a Bronze prefix."""
+    found: set[date] = set()
+    for obj in minio.list_objects(BRONZE_BUCKET, prefix=prefix, recursive=True):
+        for part in (obj.object_name or "").split("/"):
+            if not part.startswith("ingest_date="):
+                continue
+            try:
+                found.add(date.fromisoformat(part.removeprefix("ingest_date=")))
+            except ValueError:
+                pass
+    return found
+
+
 def fetch(url: str, *, proxy: str | None = None) -> bytes:
     """Fetches a Cloudflare-protected endpoint with a browser fingerprint, raising typed."""
     try:

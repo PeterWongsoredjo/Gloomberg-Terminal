@@ -7,13 +7,13 @@
 from __future__ import annotations
 
 import asyncpg
-import duckdb
 import httpx
 from google import genai
 from groq import AsyncGroq
 
 from app.agentic.config import AgenticSettings
 from app.agentic.deps import GraphDeps
+from app.core.snapshot import GoldSnapshot
 from app.agentic.providers.base import ProviderSlot, QuotaGuard
 from app.agentic.providers.breaker import CircuitBreaker
 from app.agentic.providers.gemini import GeminiProvider
@@ -61,7 +61,7 @@ def build_deps(
     settings: AgenticSettings,
     slots: dict[str, ProviderSlot],
     pg_pool: asyncpg.Pool | None,
-    duckdb_ro: duckdb.DuckDBPyConnection | None,
+    duckdb_ro: GoldSnapshot | None,
     tracer: Tracer | None = None,
     quota: QuotaGuard | None = None,
 ) -> GraphDeps:

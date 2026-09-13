@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import asyncpg
-import duckdb
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -24,6 +23,7 @@ from app.agentic.config import get_agentic_settings
 from app.api.v1 import tape
 from app.api.v1.deps import get_app_state
 from app.core.config import settings as core_settings
+from app.core.snapshot import GoldSnapshot
 from app.lifespan import AppState
 from app.main import app
 from app.observability.slo.engine import SloEngine
@@ -45,7 +45,7 @@ async def _state_or_skip() -> AppState:
     except asyncpg.PostgresError:
         await pool.close()
         pytest.skip("serving projections not synced to postgres")
-    duckdb_ro = duckdb.connect(str(gold_path), read_only=True)
+    duckdb_ro = GoldSnapshot(str(gold_path))
     return AppState(duckdb_ro=duckdb_ro, pg_pool=pool, slo_engine=SloEngine())
 
 
@@ -145,7 +145,7 @@ async def _infra_ready() -> bool:
 async def _ws_lifespan(_app: FastAPI) -> AsyncIterator[dict[str, AppState]]:
     """Opens the pool and gold connection in TestClient's own loop, for the websocket handler."""
     pool = await asyncpg.create_pool(get_agentic_settings().postgres_dsn, min_size=1, max_size=2)
-    duckdb_ro = duckdb.connect(str(Path(core_settings.duckdb_gold_path)), read_only=True)
+    duckdb_ro = GoldSnapshot(str(Path(core_settings.duckdb_gold_path)))
     try:
         yield {"app_state": AppState(duckdb_ro=duckdb_ro, pg_pool=pool, slo_engine=SloEngine())}
     finally:

@@ -9,14 +9,13 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
-import duckdb
-
 from app.agentic.config import get_agentic_settings
 from app.agentic.deps import GraphDeps
 from app.agentic.graph import build_graph
 from app.agentic.providers.base import ProviderSlot
 from app.agentic.runner import run_agentic
 from app.agentic.tracing import NoopTracer
+from app.core.snapshot import GoldSnapshot
 from app.observability.cost import QuotaTracker, get_cost_model
 from app.observability.langfuse_tracer import LangfuseTracer
 from tests.agentic.conftest import ScriptedProvider, make_slot, sentiment_response
@@ -40,7 +39,7 @@ class _StampTracer(LangfuseTracer):
         self.flushed = True
 
 
-def _deps(gold_conn: duckdb.DuckDBPyConnection, slots: dict[str, ProviderSlot]) -> GraphDeps:
+def _deps(gold_conn: GoldSnapshot, slots: dict[str, ProviderSlot]) -> GraphDeps:
     return GraphDeps(
         slots=slots,
         pg_pool=None,
@@ -51,7 +50,7 @@ def _deps(gold_conn: duckdb.DuckDBPyConnection, slots: dict[str, ProviderSlot]) 
     )
 
 
-def test_run_stamps_trace_id_into_artifacts(gold_conn: duckdb.DuckDBPyConnection) -> None:
+def test_run_stamps_trace_id_into_artifacts(gold_conn: GoldSnapshot) -> None:
     slots = {"groq": make_slot(ScriptedProvider("groq", lambda r: sentiment_response(provider="groq")))}
     deps = _deps(gold_conn, slots)
     tracer = _StampTracer("trace-abc123")
@@ -65,7 +64,7 @@ def test_run_stamps_trace_id_into_artifacts(gold_conn: duckdb.DuckDBPyConnection
     assert tracer.flushed is True
 
 
-def test_run_records_provider_quota(gold_conn: duckdb.DuckDBPyConnection) -> None:
+def test_run_records_provider_quota(gold_conn: GoldSnapshot) -> None:
     slots = {"groq": make_slot(ScriptedProvider("groq", lambda r: sentiment_response(provider="groq")))}
     deps = _deps(gold_conn, slots)
     asyncio.run(
@@ -76,7 +75,7 @@ def test_run_records_provider_quota(gold_conn: duckdb.DuckDBPyConnection) -> Non
     assert requests >= 1 and tokens > 0
 
 
-def test_run_completes_without_a_tracer(gold_conn: duckdb.DuckDBPyConnection) -> None:
+def test_run_completes_without_a_tracer(gold_conn: GoldSnapshot) -> None:
     slots = {"groq": make_slot(ScriptedProvider("groq", lambda r: sentiment_response(provider="groq")))}
     deps = _deps(gold_conn, slots)
     final = asyncio.run(

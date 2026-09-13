@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import duckdb
 import httpx
 import pytest
 
@@ -18,6 +17,7 @@ from app.agentic.config import get_agentic_settings
 from app.agentic.graph import build_graph
 from app.agentic.runner import run_agentic
 from app.core.config import settings as core_settings
+from app.core.snapshot import GoldSnapshot
 
 
 async def test_live_groq_smoke() -> None:
@@ -29,7 +29,7 @@ async def test_live_groq_smoke() -> None:
     if not gold_path.exists():
         pytest.skip("no published Gold snapshot")
 
-    gold = duckdb.connect(str(gold_path), read_only=True)
+    gold = GoldSnapshot(str(gold_path))
     async with httpx.AsyncClient(timeout=30.0) as http_client:
         clients = build_llm_clients(settings, http_client)
         deps = build_deps(settings, build_slots(settings, clients), None, gold)

@@ -8,7 +8,6 @@ container Postgres is not reachable so the offline suite always runs.
 from __future__ import annotations
 
 import asyncpg
-import duckdb
 import pytest
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
@@ -17,6 +16,7 @@ from app.agentic.config import get_agentic_settings
 from app.agentic.deps import GraphDeps
 from app.agentic.graph import build_graph
 from app.agentic.runner import run_agentic
+from app.core.snapshot import GoldSnapshot
 
 from .conftest import RecordingTracer, ScriptedProvider, make_slot, sentiment_response
 
@@ -30,7 +30,7 @@ async def _pool_or_skip() -> asyncpg.Pool:
         pytest.skip(f"postgres unavailable: {exc}")
 
 
-async def test_ledger_and_checkpointer_persist(gold_conn: duckdb.DuckDBPyConnection) -> None:
+async def test_ledger_and_checkpointer_persist(gold_conn: GoldSnapshot) -> None:
     """A live run provisions checkpoints, writes the ledger, and lands an artifact."""
     settings = get_agentic_settings()
     pool = await _pool_or_skip()

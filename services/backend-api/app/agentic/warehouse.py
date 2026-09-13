@@ -12,30 +12,22 @@ from typing import Any
 
 import duckdb
 
+from app.core.snapshot import GoldSnapshot
+
 
 def _placeholders(values: list[str]) -> str:
     return ", ".join("?" for _ in values)
 
 
 class GoldReader:
-    def __init__(self, connection: duckdb.DuckDBPyConnection | None) -> None:
-        self._connection = connection
+    def __init__(self, snapshot: GoldSnapshot | None) -> None:
+        self._snapshot = snapshot
 
     async def _rows(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
-        """Runs one query on a fresh cursor in a worker thread, returning dict rows."""
-        if self._connection is None:
+        """Runs one query against the published snapshot in a worker thread."""
+        if self._snapshot is None:
             return []
-
-        def _run() -> list[dict[str, Any]]:
-            cursor = self._connection.cursor()  # type: ignore[union-attr]
-            try:
-                cursor.execute(sql, params)
-                columns = [c[0] for c in cursor.description]
-                return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
-            finally:
-                cursor.close()
-
-        return await asyncio.to_thread(_run)
+        return await asyncio.to_thread(self._snapshot.query, sql, params)
 
     async def current_tickers(self) -> set[str]:
         rows = await self._rows("select ticker from dim_security where is_current", [])

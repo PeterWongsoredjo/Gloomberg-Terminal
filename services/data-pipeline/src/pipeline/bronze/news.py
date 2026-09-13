@@ -17,7 +17,7 @@ from xml.etree import ElementTree
 from minio import Minio
 
 from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import client, land_payloads, read_object
+from pipeline.bronze.ingest import client, ingest_dates, land_payloads, read_object
 from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import BRONZE_BUCKET, get_settings
 from pipeline.reference.matcher import Registry
@@ -99,6 +99,14 @@ def day_items(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
         for item in parse_rss(raw, dataset):
             seen.setdefault(item["item_id"], item)
     return sorted(seen.values(), key=lambda i: i["item_id"])
+
+
+def unnormalized_dates(minio: Minio) -> list[date]:
+    """Days we captured raw RSS for but never parsed into news items."""
+    raw: set[date] = set()
+    for dataset in sorted(_ACTIVE_DATASETS):
+        raw |= ingest_dates(minio, f"news_rss/{dataset}/")
+    return sorted(raw - ingest_dates(minio, "news_rss/items/"))
 
 
 def normalize_from_bronze(minio: Minio, trade_date: date) -> dict[str, Any]:

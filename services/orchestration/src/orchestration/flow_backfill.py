@@ -19,7 +19,10 @@ from orchestration.errors import TriggerPermanentError, TriggerTransientError
 from orchestration.phases import rollup, run_phase
 from orchestration.projection import pending_count
 from orchestration.results import PhaseResult
+from orchestration.tasks.dbt_build import dbt_build
 from orchestration.tasks.finalize import finalize_run
+from orchestration.tasks.gold_sources import reconcile_agent_artifacts, reconcile_news_items
+from orchestration.tasks.promote import promote_gold
 from orchestration.tasks.trigger import trigger_intraday
 
 BACKFILL_WINDOW_DAYS = 14
@@ -61,6 +64,41 @@ def _drain_date(
     return scored, status
 
 
+def _degrade_on_recovery_failure(exc: Exception) -> PhaseResult | None:
+    """Yesterday's leftovers are worth a retry tomorrow, never a failed run."""
+    return PhaseResult(status="DEGRADED", notes=f"recovery failed: {exc}")
+
+
+def _recover_missed_days(
+    dsn: str, flow_run_id: str, td: date, config: OrchestrationConfig
+) -> list[str]:
+    """Lands whatever earlier runs left behind, then rebuilds Gold if anything landed."""
+    recovered = [
+        run_phase(
+            dsn, flow_run_id, td, "reconcile_news_items",
+            lambda: reconcile_news_items(), on_error=_degrade_on_recovery_failure,
+        ),
+        run_phase(
+            dsn, flow_run_id, td, "reconcile_agent_artifacts",
+            lambda: reconcile_agent_artifacts(), on_error=_degrade_on_recovery_failure,
+        ),
+    ]
+    statuses = [r.status for r in recovered if r.status != "SKIPPED"]
+    if not any(r.status == "SUCCESS" for r in recovered):
+        return statuses
+
+    # nothing new reached Bronze on a skip, so there is nothing to rebuild
+    build = run_phase(
+        dsn, flow_run_id, td, "dbt_build",
+        lambda: dbt_build(config), on_error=_degrade_on_recovery_failure,
+    )
+    promote = run_phase(
+        dsn, flow_run_id, td, "promote",
+        lambda: promote_gold(), on_error=_degrade_on_recovery_failure,
+    )
+    return [*statuses, build.status, promote.status]
+
+
 _TASK_RUNNER: ThreadPoolTaskRunner[Any] = ThreadPoolTaskRunner(max_workers=1)
 
 
@@ -82,6 +120,7 @@ def backfill_sentiment_flow(trade_date: str | None = None, max_rounds: int = MAX
             scored += drained
             if status != "SKIPPED":
                 statuses.append(status)
+        statuses.extend(_recover_missed_days(dsn, flow_run_id, td, config))
         overall = rollup(*statuses) if statuses else "SKIPPED"
         return overall
     except Exception:

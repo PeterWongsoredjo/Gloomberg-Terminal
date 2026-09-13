@@ -11,6 +11,8 @@ from typing import Any
 
 import duckdb
 
+from app.core.snapshot import GoldSnapshot
+
 logger = logging.getLogger("gloomberg.serving.gold")
 
 # a table the build has not published yet, or a column it has not rebuilt yet
@@ -20,26 +22,14 @@ _UNBUILT = (duckdb.CatalogException, duckdb.BinderException)
 class ServingGoldReader:
     """The Gold-side queries the serving endpoints need."""
 
-    def __init__(self, connection: duckdb.DuckDBPyConnection | None) -> None:
-        self._connection = connection
+    def __init__(self, snapshot: GoldSnapshot | None) -> None:
+        self._snapshot = snapshot
 
     async def _rows(self, sql: str, params: list[Any]) -> list[dict[str, Any]]:
-        """Runs one query on a fresh cursor in a worker thread, returning dict rows."""
-        if self._connection is None:
+        """Runs one query against the published snapshot in a worker thread."""
+        if self._snapshot is None:
             return []
-
-        def _run() -> list[dict[str, Any]]:
-            cursor = self._connection.cursor()  # type: ignore[union-attr]
-            try:
-                cursor.execute(sql, params)
-                if cursor.description is None:
-                    return []
-                columns = [c[0] for c in cursor.description]
-                return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
-            finally:
-                cursor.close()
-
-        return await asyncio.to_thread(_run)
+        return await asyncio.to_thread(self._snapshot.query, sql, params)
 
     async def _row(self, sql: str, params: list[Any]) -> dict[str, Any] | None:
         rows = await self._rows(sql, params)

@@ -8,6 +8,7 @@ those rows rather than blanking the whole feed.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import duckdb
@@ -15,6 +16,7 @@ import httpx
 import pytest
 
 from app.api.v1.deps import get_app_state
+from app.core.snapshot import GoldSnapshot
 from app.lifespan import AppState
 from app.main import app
 
@@ -55,8 +57,10 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-def _snapshot(with_corporate_actions: bool = True) -> duckdb.DuckDBPyConnection:
-    con = duckdb.connect()
+def _snapshot(tmp_path: Path, with_corporate_actions: bool = True) -> GoldSnapshot:
+    """Writes a hermetic Gold file, then opens it the way serving does."""
+    path = tmp_path / "gold.duckdb"
+    con = duckdb.connect(str(path))
     con.execute(_NEWS_DDL)
     con.execute(_SENTIMENT_DDL)
     con.execute(_TICKER_DDL)
@@ -82,11 +86,12 @@ def _snapshot(with_corporate_actions: bool = True) -> duckdb.DuckDBPyConnection:
             "insert into fct_article_ticker_sentiment values "
             "('corp_action:idx_ca:999001','AADI',0.22,'BULLISH','PRIMARY')"
         )
-    return con
+    con.close()
+    return GoldSnapshot(str(path))
 
 
-async def _get_news(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
-    state = AppState(duckdb_ro=con, pg_pool=None, slo_engine=None)
+async def _get_news(snapshot: GoldSnapshot) -> dict[str, Any]:
+    state = AppState(duckdb_ro=snapshot, pg_pool=None, slo_engine=None)
     app.dependency_overrides[get_app_state] = lambda: state
     try:
         async for client in _client():
@@ -96,6 +101,7 @@ async def _get_news(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
             return body
     finally:
         app.dependency_overrides.pop(get_app_state, None)
+        snapshot.close()
     raise AssertionError("no response")
 
 
@@ -105,9 +111,9 @@ async def _client() -> AsyncIterator[httpx.AsyncClient]:
         yield client
 
 
-async def test_a_corporate_action_reaches_the_news_feed() -> None:
+async def test_a_corporate_action_reaches_the_news_feed(tmp_path: Path) -> None:
     """The DoD case: a corporate action is served, typed, and carries its sentiment."""
-    body = await _get_news(_snapshot())
+    body = await _get_news(_snapshot(tmp_path))
     rows = body["data"]["rows"]
     corp = [r for r in rows if r["item_type"] == "CORPORATE_ACTION"]
 
@@ -121,9 +127,9 @@ async def test_a_corporate_action_reaches_the_news_feed() -> None:
     assert corp[0]["ticker_sentiments"][0]["relevance"] == "PRIMARY"
 
 
-async def test_an_article_stays_typed_as_an_article() -> None:
+async def test_an_article_stays_typed_as_an_article(tmp_path: Path) -> None:
     """The discriminator has to distinguish, not just exist."""
-    rows = (await _get_news(_snapshot()))["data"]["rows"]
+    rows = (await _get_news(_snapshot(tmp_path)))["data"]["rows"]
     article = [r for r in rows if r["item_id"] == "cnbc:a1"]
 
     assert len(article) == 1
@@ -131,16 +137,16 @@ async def test_an_article_stays_typed_as_an_article() -> None:
     assert article[0]["url"] == "https://example.test/a"
 
 
-async def test_both_kinds_interleave_newest_first() -> None:
+async def test_both_kinds_interleave_newest_first(tmp_path: Path) -> None:
     """Corporate actions merge into the one ordering, they are not a separate list."""
-    rows = (await _get_news(_snapshot()))["data"]["rows"]
+    rows = (await _get_news(_snapshot(tmp_path)))["data"]["rows"]
 
     assert [r["item_id"] for r in rows] == ["cnbc:a1", "corp_action:idx_ca:999001"]
 
 
-async def test_an_unbuilt_corporate_action_table_leaves_the_articles_alone() -> None:
+async def test_an_unbuilt_corporate_action_table_leaves_the_articles_alone(tmp_path: Path) -> None:
     """The reason these are two reads and not one union: articles must survive."""
-    rows = (await _get_news(_snapshot(with_corporate_actions=False)))["data"]["rows"]
+    rows = (await _get_news(_snapshot(tmp_path, with_corporate_actions=False)))["data"]["rows"]
 
     assert [r["item_id"] for r in rows] == ["cnbc:a1"]
     assert rows[0]["item_type"] == "ARTICLE"

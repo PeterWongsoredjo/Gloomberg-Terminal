@@ -22,6 +22,7 @@ from app.agentic.graph import build_graph
 from app.agentic.prompts.registry import registered_templates
 from app.agentic.tracing import NoopTracer
 from app.core.config import settings as core_settings
+from app.core.snapshot import GoldSnapshot
 from app.eval import lifecycle
 from app.observability import rollup
 from app.observability.config import get_observability_settings
@@ -35,7 +36,7 @@ logger = logging.getLogger("gloomberg.lifespan")
 
 @dataclass
 class AppState:
-    duckdb_ro: duckdb.DuckDBPyConnection | None = None
+    duckdb_ro: GoldSnapshot | None = None
     pg_pool: asyncpg.Pool | None = None
     llm_clients: dict[str, Any] | None = None
     langfuse_handler: Any | None = None
@@ -59,9 +60,9 @@ async def _open_pg_pool(settings: AgenticSettings) -> asyncpg.Pool | None:
         return None
 
 
-def _open_duckdb() -> duckdb.DuckDBPyConnection | None:
+def _open_duckdb() -> GoldSnapshot | None:
     try:
-        return duckdb.connect(core_settings.duckdb_gold_path, read_only=True)
+        return GoldSnapshot(core_settings.duckdb_gold_path)
     except (duckdb.Error, OSError) as exc:
         logger.warning("gold snapshot unavailable, market context empty: %s", exc)
         return None
