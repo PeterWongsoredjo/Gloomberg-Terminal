@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: gold
+    description: "The published Gold snapshot, mirrored from DuckDB by pipeline.bigquery.mirror."
+    schema: gloomberg_gold
+    tables:
+      - name: fct_daily_trade
+      - name: dim_security
+      - name: dim_sector
+      - name: fct_news_item
+      - name: fct_article_ticker_sentiment
+      - name: fct_sentiment
+      - name: agg_pipeline_telemetry
+      - name: publish_manifest

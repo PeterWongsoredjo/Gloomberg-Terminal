@@ -1,0 +1,67 @@
+version: 2
+
+models:
+  - name: mart_foreign_flow_daily
+    description: "Prices and foreign net flow per ticker per trade date, last 55 days."
+    columns:
+      - name: trade_date
+        tests: [not_null]
+      - name: ticker
+        tests: [not_null]
+      - name: close_idr
+        description: "Integer rupiah, never float."
+        tests: [not_null]
+      - name: net_foreign_shares
+        description: "Net foreign buy minus sell in SHARES. Gold names this net_foreign_idr, but IDX sends share counts."
+      - name: net_foreign_value_est_idr
+        description: "Estimate only: net foreign shares times the day's volume-weighted average price."
+
+  - name: mart_news_attention_daily
+    description: "Scored article counts and mean sentiment per ticker per trade date."
+    columns:
+      - name: trade_date
+        tests: [not_null]
+      - name: ticker
+        tests: [not_null]
+      - name: articles
+        tests: [not_null]
+
+  - name: mart_news_capture_days
+    description: "Days news was actually observed. Absence means unobserved, not quiet."
+    columns:
+      - name: trade_date
+        tests: [not_null, unique]
+
+  - name: mart_attention_leaderboard_7d
+    description: "Seven-day news attention next to foreign flow, with a descriptive divergence label."
+    columns:
+      - name: ticker
+        tests: [not_null, unique]
+      - name: subject_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["SECURITY", "INDEX"]
+      - name: divergence
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["POSITIVE_NEWS_FOREIGN_SELLING", "NEGATIVE_NEWS_FOREIGN_BUYING"]
+
+  - name: mart_coverage_blind_spots
+    description: "Top-100 turnover names with zero scored articles in 30 days."
+    columns:
+      - name: ticker
+        tests: [not_null, unique]
+
+  - name: mart_freshness
+    description: "Latest trade date per domain and mirror time, for the dashboard banner."
+    columns:
+      - name: domain
+        tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: ["prices", "news", "sentiment"]

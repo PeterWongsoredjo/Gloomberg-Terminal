@@ -26,7 +26,15 @@ from orchestration.errors import TriggerPermanentError, TriggerTransientError
 from orchestration.phases import rollup, run_phase
 from orchestration.results import PhaseResult
 from orchestration.tasks.coverage import awaiting_coverage, coverage_gate
-from orchestration.tasks.dbt_build import DIVIDEND_PHASES, INSIGHT_PHASES, dbt_build
+from orchestration.tasks.bigquery import publish_bigquery
+from orchestration.tasks.dbt_build import (
+    BIGQUERY_PHASES,
+    BIGQUERY_PROJECT,
+    BIGQUERY_TARGET,
+    DIVIDEND_PHASES,
+    INSIGHT_PHASES,
+    dbt_build,
+)
 from orchestration.tasks.documents import extract_dividend_filings, land_dividend_attachments
 from orchestration.tasks.finalize import finalize_run
 from orchestration.tasks.gold_sources import land_agent_artifacts, normalize_news
@@ -102,6 +110,28 @@ def _degrade_on_projection_failure(exc: Exception) -> PhaseResult | None:
 def _degrade_on_insight_build_failure(exc: Exception) -> PhaseResult | None:
     """The panel already serves the conclusion from Postgres, so only Gold history lags."""
     return PhaseResult(status="DEGRADED", notes=f"insight rebuild failed: {exc}")
+
+
+def _degrade_on_bigquery_failure(exc: Exception) -> PhaseResult | None:
+    """The terminal never reads BigQuery, so only the analyst copy lags."""
+    return PhaseResult(status="DEGRADED", notes=f"bigquery publish failed: {exc}")
+
+
+def _bigquery_result(
+    dsn: str, flow_run_id: str, td: date, config: OrchestrationConfig
+) -> PhaseResult:
+    """Mirrors the settled Gold to BigQuery, then rebuilds the analyst marts."""
+    mirror = run_phase(
+        dsn, flow_run_id, td, "publish_bigquery",
+        lambda: publish_bigquery(), on_error=_degrade_on_bigquery_failure,
+    )
+    if mirror.status != "SUCCESS":
+        return mirror
+    return run_phase(
+        dsn, flow_run_id, td, "dbt_build_bigquery",
+        lambda: dbt_build(config, BIGQUERY_PHASES, project=BIGQUERY_PROJECT, target=BIGQUERY_TARGET),
+        on_error=_degrade_on_bigquery_failure,
+    )
 
 
 def _dividend_extraction_result(
@@ -266,6 +296,9 @@ def gloomberg_daily_flow(trade_date: str | None = None) -> str:
         # after promote, so it reads the closes the day settled on
         insight = _eod_insight_result(dsn, flow_run_id, td, config)
 
+        # last, so the mirror copies the fully settled day
+        bigquery = _bigquery_result(dsn, flow_run_id, td, config)
+
         overall = rollup(
             gate.status,
             corporate_actions.status,
@@ -274,6 +307,7 @@ def gloomberg_daily_flow(trade_date: str | None = None) -> str:
             dividend_queue.status,
             dividends.status,
             insight.status,
+            bigquery.status,
             *(landing.status for landing in landings),
         )
         return overall

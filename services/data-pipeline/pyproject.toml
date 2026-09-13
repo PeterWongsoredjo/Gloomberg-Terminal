@@ -12,6 +12,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pytz>=2026.2",
     "pypdf>=5.1", # reads the text out of filed dividend PDFs
+    "google-cloud-bigquery>=3.25",
 ]
 
 [project.optional-dependencies]

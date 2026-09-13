@@ -45,6 +45,14 @@ DIVIDEND_PHASES: list[tuple[str, list[str]]] = [
     ("test", ["test", "--select", "fct_cash_dividend fct_cash_dividend_news"]),
 ]
 
+# the analyst marts in BigQuery, rebuilt from the fresh mirror
+BIGQUERY_PHASES: list[tuple[str, list[str]]] = [
+    ("marts", ["run"]),
+    ("test", ["test"]),
+]
+BIGQUERY_PROJECT = "bigquery"
+BIGQUERY_TARGET = "warehouse"
+
 # stderr signatures that mean "retry once", not "a real error"
 _TRANSIENT_SIGNATURES = (
     "conflicting lock",
@@ -66,12 +74,12 @@ class _PhaseRun:
     run_results: dict[str, Any] | None
 
 
-def _run_dbt(dbt_dir: Path, args: list[str]) -> _PhaseRun:
+def _run_dbt(dbt_dir: Path, args: list[str], target: str = "analytical") -> _PhaseRun:
     """Runs one dbt phase and reads its fresh run_results.json."""
     results_path = dbt_dir / "target" / "run_results.json"
     if results_path.exists():
         results_path.unlink()  # avoid reading a stale result on a compile error
-    cmd = ["uv", "run", "dbt", *args, "--profiles-dir", ".", "--target", "analytical"]
+    cmd = ["uv", "run", "dbt", *args, "--profiles-dir", ".", "--target", target]
     proc = subprocess.run(
         cmd, cwd=dbt_dir, env=os.environ.copy(), capture_output=True, text=True
     )
@@ -124,14 +132,18 @@ def _status_counts(run_results: dict[str, Any] | None) -> dict[str, int]:
     retry_condition_fn=retry_on_transient_dbt,
 )
 def dbt_build(
-    config: OrchestrationConfig, phases: list[tuple[str, list[str]]] | None = None
+    config: OrchestrationConfig,
+    phases: list[tuple[str, list[str]]] | None = None,
+    project: str | None = None,
+    target: str = "analytical",
 ) -> PhaseResult:
     """Runs the given dbt phases in order; any error-severity failure aborts before promotion."""
     load_root_env()
+    project_dir = config.dbt_dir / project if project else config.dbt_dir
     last_invocation: str | None = None
     test_counts: dict[str, int] = {}
     for name, args in phases or PHASES:
-        run = _run_dbt(config.dbt_dir, args)
+        run = _run_dbt(project_dir, args, target)
         _classify(name, run)
         if run.run_results is not None:
             last_invocation = run.run_results["metadata"]["invocation_id"]

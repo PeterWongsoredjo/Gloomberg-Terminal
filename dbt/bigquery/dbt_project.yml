@@ -1,0 +1,23 @@
+name: "gloomberg_bigquery"
+version: "1.0.0"
+config-version: 2
+
+profile: "gloomberg_bigquery"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# marts rebuild whole each run, public holds only views
+models:
+  gloomberg_bigquery:
+    marts:
+      +materialized: table
+    public:
+      +materialized: view
+      +schema: gloomberg_public

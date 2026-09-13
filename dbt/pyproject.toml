@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Gloomberg Terminal medallion transform — dbt project (docs/architecture/02)"
 requires-python = ">=3.12"
 dependencies = [
+    "dbt-bigquery>=1.9",
     "dbt-core>=1.9",
     "dbt-duckdb>=1.9",
     "dbt-postgres>=1.9",

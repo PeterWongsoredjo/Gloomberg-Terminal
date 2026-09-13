@@ -1,0 +1,14 @@
+gloomberg_bigquery:
+  target: warehouse
+  outputs:
+    warehouse:
+      type: bigquery
+      # key file on the vps, gcloud login everywhere else
+      method: "{{ 'service-account' if env_var('BQ_CREDENTIALS', '') else 'oauth' }}"
+      keyfile: "{{ env_var('BQ_CREDENTIALS', '') }}"
+      project: "{{ env_var('BQ_PROJECT') }}"
+      dataset: gloomberg_marts
+      location: "{{ env_var('BQ_LOCATION', 'asia-southeast2') }}"
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1
