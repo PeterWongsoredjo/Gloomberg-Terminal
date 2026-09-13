@@ -81,11 +81,20 @@ FEEDS: dict[str, FeedSpec] = {
         url="https://investasi.kontan.co.id/rss",
         ext="xml",
         accumulates=True,
+        # cloudfront turns away datacenter ips, a home ip gets through
+        needs_proxy=True,
     ),
-    "news_antara": FeedSpec(
+    "news_liputan6": FeedSpec(
         source="news_rss",
-        dataset="antara_ekonomi",
-        url="https://www.antaranews.com/rss/ekonomi.xml",
+        dataset="liputan6_saham",
+        url="https://feed.liputan6.com/rss/saham",
+        ext="xml",
+        accumulates=True,
+    ),
+    "news_idxchannel": FeedSpec(
+        source="news_rss",
+        dataset="idxchannel_market",
+        url="https://www.idxchannel.com/rss/market-news",
         ext="xml",
         accumulates=True,
     ),

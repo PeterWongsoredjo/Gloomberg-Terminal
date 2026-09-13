@@ -66,3 +66,21 @@ def test_news_feed_never_uses_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None
     ingest.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
 
     assert seen["proxy"] is None
+
+
+def test_kontan_goes_through_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kontan blocks the vps ip outright, so its fetch must use the proxy."""
+    seen: dict[str, Any] = {}
+
+    def fake_fetch(url: str, *, proxy: str | None = None) -> bytes:
+        seen["proxy"] = proxy
+        return b"<rss/>"
+
+    monkeypatch.setattr(ingest, "fetch", fake_fetch)
+    monkeypatch.setattr(ingest, "land_payloads", lambda *a, **kw: {})
+
+    spec = FEEDS["news_kontan"]
+    assert spec.needs_proxy
+    ingest.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
+
+    assert seen["proxy"] == "http://user:pass@p.webshare.io:80"

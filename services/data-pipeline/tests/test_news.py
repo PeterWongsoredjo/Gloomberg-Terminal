@@ -70,15 +70,16 @@ def test_tag_items_resolves_against_the_registry() -> None:
 
 
 def test_news_feeds_registry_dropped_cnbc_all() -> None:
-    """The curated registry carries exactly the three quality feeds."""
+    """The curated registry carries exactly the four quality feeds."""
     datasets = {FEEDS[name].dataset for name in NEWS_FEEDS}
-    assert datasets == {"cnbc_market", "kontan_investasi", "antara_ekonomi"}
+    assert datasets == {"cnbc_market", "kontan_investasi", "liputan6_saham", "idxchannel_market"}
 
 
 def test_retired_datasets_go_dark_immediately() -> None:
     """Already-landed payloads from a removed feed stop being parsed."""
     assert "cnbc_all" not in news._ACTIVE_DATASETS
-    assert news._ACTIVE_DATASETS == {"cnbc_market", "kontan_investasi", "antara_ekonomi"}
+    assert "antara_ekonomi" not in news._ACTIVE_DATASETS
+    assert news._ACTIVE_DATASETS == {"cnbc_market", "kontan_investasi", "liputan6_saham", "idxchannel_market"}
 
 
 def test_parse_rss_stable_item_id() -> None:
