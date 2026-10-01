@@ -47,6 +47,7 @@ def ingest_news_result(manifests: list[dict[str, Any]]) -> PhaseResult:
         payload=manifests,
         notes=f"{len(landed)}/{len(manifests)} news feeds landed",
         ingest_run_id=anchor,
+        records_processed=sum(int(m.get("record_count") or 0) for m in landed),
     )
 
 

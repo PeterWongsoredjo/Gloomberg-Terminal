@@ -9,6 +9,7 @@ dependencies = [
     "psycopg[binary]>=3.2",     # OR-06 run-state event sink into Postgres
     "pyyaml>=6",                # session window templates for the intraday gate
     "gloomberg-data-pipeline",  # calls the Stage-1 ingest/publish/sync functions
+    "prometheus-client>=0.21",
 ]
 
 [project.optional-dependencies]

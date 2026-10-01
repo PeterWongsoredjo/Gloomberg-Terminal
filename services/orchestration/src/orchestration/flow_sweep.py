@@ -25,6 +25,7 @@ from orchestration.results import PhaseResult
 from orchestration.tasks.dbt_build import dbt_build
 from orchestration.tasks.finalize import finalize_run
 from orchestration.tasks.promote import promote_gold
+from orchestration.tasks.quarantine import count_quarantine, degrade_on_count_failure
 from orchestration.tasks.sweep import (
     coverage_recovered,
     recovered_feeds,
@@ -55,6 +56,11 @@ def _rebuild_result(
         dsn, flow_run_id, td, "resweep_promote",
         lambda: promote_gold(), on_error=_degrade_on_rebuild_failure,
     )
+    if promote.status == "SUCCESS":
+        run_phase(
+            dsn, flow_run_id, td, "resweep_count_quarantine",
+            lambda: count_quarantine(td), on_error=degrade_on_count_failure,
+        )
     return PhaseResult(status=rollup(build.status, promote.status), notes="recovered prices rebuilt")
 
 

@@ -46,6 +46,7 @@ from orchestration.tasks.project import (
     project_dividend_filings,
 )
 from orchestration.tasks.promote import promote_gold
+from orchestration.tasks.quarantine import count_quarantine, degrade_on_count_failure
 from orchestration.tasks.registry import refresh_registry, retag_news
 from orchestration.tasks.subjects import eod_insight_subjects
 from orchestration.tasks.trigger import trigger_dividend_extraction, trigger_eod_insight
@@ -83,6 +84,7 @@ def _ingest_result(td: date, config: OrchestrationConfig) -> PhaseResult:
         payload=manifests,
         notes=f"{len(manifests)} manifests landed, {len(dated)} for {td.isoformat()}",
         ingest_run_id=anchor,
+        records_processed=sum(int(m.get("record_count") or 0) for m in dated),
     )
 
 
@@ -271,6 +273,10 @@ def gloomberg_daily_flow(trade_date: str | None = None) -> str:
         ]
         run_phase(dsn, flow_run_id, td, "dbt_build", lambda: dbt_build(config))
         run_phase(dsn, flow_run_id, td, "promote", lambda: promote_gold())
+        run_phase(
+            dsn, flow_run_id, td, "count_quarantine",
+            lambda: count_quarantine(td), on_error=degrade_on_count_failure,
+        )
 
         corporate_actions = run_phase(
             dsn, flow_run_id, td, "project_corporate_actions",

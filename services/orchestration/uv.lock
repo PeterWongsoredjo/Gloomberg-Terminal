@@ -697,6 +697,7 @@ dependencies = [
     { name = "gloomberg-data-pipeline" },
     { name = "httpx" },
     { name = "prefect" },
+    { name = "prometheus-client" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pyyaml" },
 ]
@@ -716,6 +717,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
     { name = "prefect", specifier = ">=3.1" },
+    { name = "prometheus-client", specifier = ">=0.21" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },

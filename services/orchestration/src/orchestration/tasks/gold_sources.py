@@ -26,6 +26,7 @@ def normalize_news(trade_date: date) -> PhaseResult:
         payload=manifest,
         notes=f"{manifest['record_count']} news items normalized to bronze",
         ingest_run_id=str(manifest.get("ingest_run_id") or "") or None,
+        records_processed=int(manifest.get("record_count") or 0),
     )
 
 
@@ -41,6 +42,7 @@ def reconcile_news_items() -> PhaseResult:
         status="SUCCESS",
         payload={"dates": [d.isoformat() for d in days], "items": items},
         notes=f"{items} news items normalized across {len(days)} missed days",
+        records_processed=items,
     )
 
 
@@ -59,6 +61,7 @@ def reconcile_agent_artifacts() -> PhaseResult:
         status="SUCCESS",
         payload={"dates": [d.isoformat() for d in days], "artifacts": landed},
         notes=f"{landed} agent artifacts landed across {len(days)} missed days",
+        records_processed=landed,
     )
 
 
@@ -72,4 +75,5 @@ def land_agent_artifacts(trade_date: date) -> PhaseResult:
         status="SUCCESS",
         payload=manifests,
         notes=f"{landed} agent artifacts landed across {len(manifests)} datasets",
+        records_processed=landed,
     )

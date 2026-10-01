@@ -14,6 +14,7 @@ from app.agentic.budget import iterations_left, tokens_left
 from app.agentic.nodes._common import contains_advice, get_deps, value_confidence
 from app.agentic.objectives import spec_for
 from app.agentic.state import AgentState
+from app.observability.metrics import record_gate_result
 
 _PRICE_DROP = re.compile(r"crash|plunge|anjlok|jatuh|merosot|tumbang|sell-?off|collaps", re.IGNORECASE)
 
@@ -161,9 +162,10 @@ async def evaluate(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         for draft in drafts:
             checks = _checks(objective, draft, corp_tickers)
             passed = _passed(checks)
+            failed = [g for g in _HARD_GATES if not checks[g]]
             graded.append({**draft, "checks": checks, "passed": passed})
-            if not passed:
-                reasons.extend(g for g in _HARD_GATES if not checks[g])
+            record_gate_result(objective, passed, failed)
+            reasons.extend(failed)
 
     can_retry = iterations_left(state["budget"]) and tokens_left(state["budget"])
     verdict = _verdict(objective, graded, can_retry)

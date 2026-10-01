@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from orchestration.clock import now_utc
 from orchestration.events import build_event, sink_event
+from orchestration.metrics import record_stage
 from orchestration.results import PhaseResult
 
 SEVERITY = {"SUCCESS": 0, "SKIPPED": 0, "PARTIAL": 1, "DEGRADED": 2, "FAILED": 3}
@@ -37,7 +38,7 @@ def run_phase(
     fn: Callable[[], PhaseResult],
     on_error: Callable[[Exception], PhaseResult | None] | None = None,
 ) -> PhaseResult:
-    """Times one phase, emits its event, and lets on_error downgrade a raise."""
+    """Times one phase, emits its event and counts, and lets on_error downgrade a raise."""
     started = now_utc()
     try:
         result = fn()
@@ -48,6 +49,7 @@ def run_phase(
             raise
         result = handled
     emit_phase(dsn, flow_run_id, td, phase, result, started)
+    record_stage(phase, result)
     return result
 
 

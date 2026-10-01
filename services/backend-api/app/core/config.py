@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     api_token: str = ""
     # per visitor IP, generous for browser polling, hostile to scripted bursts
     rate_limit: str = "240/minute"
+    metrics_enabled: bool = True
 
     postgres_dsn: str = "postgresql://localhost:5432/gloomberg"
     duckdb_gold_path: str = "warehouse/gold.duckdb"

@@ -13,3 +13,5 @@ class PhaseResult:
     dbt_invocation_id: str | None = None
     run_id: str | None = None
     gate: dict[str, Any] | None = None
+    records_processed: int | None = None
+    records_rejected: int | None = None

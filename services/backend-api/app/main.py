@@ -6,9 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.api import metrics
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
+from app.core.metrics_middleware import MetricsMiddleware
 from app.core.ratelimit import RateLimitMiddleware
 from app.lifespan import lifespan
 
@@ -37,6 +39,9 @@ def create_app() -> FastAPI:
         enabled=bool(settings.rate_limit),  # empty limit turns the ceiling off, dev only
     )
     app.add_middleware(RateLimitMiddleware)
+    if settings.metrics_enabled:
+        app.add_middleware(MetricsMiddleware)
+        app.include_router(metrics.router)
     register_exception_handlers(app)
     app.include_router(api_router, prefix="/api/v1")
     return app
