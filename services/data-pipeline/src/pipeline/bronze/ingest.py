@@ -11,6 +11,7 @@ from typing import Any
 
 import zstandard
 from curl_cffi import requests
+from curl_cffi.requests import BrowserTypeLiteral
 from minio import Minio
 from ulid import ULID
 
@@ -19,6 +20,9 @@ from pipeline.bronze.feeds import FeedSpec
 from pipeline.bronze.manifest import build_manifest, deterministic_run_id, idempotency_key
 from pipeline.clock import now_utc, wib_date
 from pipeline.config import BRONZE_BUCKET, Settings
+
+# browser disguises in order, cloudflare blocks them one at a time
+FINGERPRINTS: tuple[BrowserTypeLiteral, ...] = ("safari2601", "safari184", "tor145", "chrome")
 
 
 class FetchError(RuntimeError):
@@ -77,18 +81,31 @@ def ingest_dates(minio: Minio, prefix: str) -> set[date]:
     return found
 
 
-def fetch(url: str, *, proxy: str | None = None) -> bytes:
-    """Fetches a Cloudflare-protected endpoint with a browser fingerprint, raising typed."""
+def _fetch_as(url: str, fingerprint: BrowserTypeLiteral, proxy: str | None) -> bytes:
+    """One fetch disguised as one browser, raising typed."""
     try:
-        response = requests.get(url, impersonate="chrome", timeout=30, proxy=proxy)
+        response = requests.get(url, impersonate=fingerprint, timeout=30, proxy=proxy)
     except Exception as exc:  # curl_cffi network errors are connect/read timeouts
         raise FetchError(None, f"{url} -> {exc}", via_proxy=proxy is not None) from exc
     if response.status_code != 200:
         raise FetchError(
-            response.status_code, f"{url} -> HTTP {response.status_code}", via_proxy=proxy is not None
+            response.status_code,
+            f"{url} -> HTTP {response.status_code} as {fingerprint}",
+            via_proxy=proxy is not None,
         )
     content: bytes = response.content
     return content
+
+
+def fetch(url: str, *, proxy: str | None = None) -> bytes:
+    """Fetches a Cloudflare-protected endpoint, trying the next fingerprint on a 403."""
+    for fingerprint in FINGERPRINTS[:-1]:
+        try:
+            return _fetch_as(url, fingerprint, proxy)
+        except FetchError as exc:
+            if exc.status_code != 403:
+                raise
+    return _fetch_as(url, FINGERPRINTS[-1], proxy)
 
 
 def url_for(spec: FeedSpec, trade_date: date) -> str:
