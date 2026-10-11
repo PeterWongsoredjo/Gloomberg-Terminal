@@ -60,6 +60,8 @@ def coverage_notes(result: CoverageResult) -> str:
     )
     if result.stale_days:
         note += f" ({result.stale_days}d stale)"
+    if result.retro_days:
+        note += f" (backfill, captured {result.retro_days}d after the date)"
     if result.missing_tickers:
         note += f"; missing {', '.join(result.missing_tickers[:20])}"
     return note

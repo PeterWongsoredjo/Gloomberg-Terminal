@@ -197,15 +197,16 @@ def test_the_gate_task_measures_and_stamps_before_deciding(
     seen: dict[str, Any] = {}
 
     def measured(
-        td: date, floor: float, hard_min: float, min_securities: int, seed: Path
+        td: date, floor: float, hard_min: float, min_securities: int, seed: Path, *, retro: bool
     ) -> Any:
-        seen.update(td=td, floor=floor, hard_min=hard_min, min_securities=min_securities)
+        seen.update(td=td, floor=floor, hard_min=hard_min, min_securities=min_securities, retro=retro)
         return _measured(0.60, ["GONE", "MSNG"], expected=5)
 
     monkeypatch.setattr(gate, "measure_and_revise", measured)
     result = coverage_gate.fn([_universe_manifest()], TD, 0.95, 0.80, 500, SEED)
 
-    assert seen == {"td": TD, "floor": 0.95, "hard_min": 0.80, "min_securities": 500}
+    # the daily gate never judges against a later capture
+    assert seen == {"td": TD, "floor": 0.95, "hard_min": 0.80, "min_securities": 500, "retro": False}
     assert result.status == "FAILED"
     assert result.gate is not None and result.gate["missing_tickers"] == ["GONE", "MSNG"]
 

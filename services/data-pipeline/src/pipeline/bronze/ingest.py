@@ -21,7 +21,7 @@ from pipeline.bronze.manifest import build_manifest, deterministic_run_id, idemp
 from pipeline.clock import now_utc, wib_date
 from pipeline.config import BRONZE_BUCKET, Settings
 
-# browser disguises in order, cloudflare blocks them one at a time
+# browser disguises to try, cloudflare blocks them one by one
 FINGERPRINTS: tuple[BrowserTypeLiteral, ...] = ("safari2601", "safari184", "tor145", "chrome")
 
 

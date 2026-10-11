@@ -53,3 +53,9 @@ deployments:
     schedules:
       - cron: "0 2 * * *"           # ahead of the backup cron, sessions long closed
         timezone: "Asia/Jakarta"
+
+  - name: gloomberg-retro-backfill
+    entrypoint: src/orchestration/flow_retro.py:idx_retro_backfill_flow
+    description: "Manual only, never scheduled. Re-judges a past window of trading days against a company-profile capture taken after them, flags every day it passes RETRO_AUTHORITY, then rebuilds Gold once. Run the resweep for those dates first so their prices are in Bronze."
+    work_pool:
+      name: gloomberg-local

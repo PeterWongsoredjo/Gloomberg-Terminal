@@ -24,7 +24,7 @@ adjust as (
 ),
 
 coverage as (
-    select trade_date, status
+    select trade_date, status, dq_flags
     from {{ ref('int_ingestion__coverage') }}
     where source = 'idx_summary' and dataset = 'daily_trade'
 ),
@@ -46,7 +46,8 @@ base as (
         s.is_fca,
         coalesce(a.cumulative_factor, 1.0) as adjustment_factor,
         coalesce(a.has_pending_adjustment, false) as has_pending,
-        c.status as coverage_status
+        c.status as coverage_status,
+        coalesce(c.dq_flags, []::varchar[]) as coverage_flags
     from trade t
     -- as-of join: the security version in force on the trade_date
     join security s
@@ -80,9 +81,15 @@ select
             over (partition by security_id order by trade_date), 0) - 1
     )::decimal(18, 8) as daily_return,
     case when has_pending then 'ADJUSTMENT_PENDING' else 'CLEAN' end as price_series_integrity,
-    list_concat(
+    -- every row carries its day's coverage verdict
+    list_sort(list_distinct(list_concat(
         case when has_pending then ['ADJUSTMENT_PENDING']::varchar[] else []::varchar[] end,
-        case when coverage_status = 'PARTIAL' then ['COVERAGE_GAP']::varchar[] else []::varchar[] end,
+        coverage_flags,
+        case
+            when coverage_status = 'PARTIAL' then ['COVERAGE_GAP']::varchar[]
+            when coverage_status = 'FAILED' and len(coverage_flags) = 0 then ['COVERAGE_GAP']::varchar[]
+            else []::varchar[]
+        end,
         case when is_fca then ['FCA_PRICING']::varchar[] else []::varchar[] end
-    ) as dq_flags
+    ))) as dq_flags
 from base

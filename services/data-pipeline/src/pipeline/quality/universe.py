@@ -20,7 +20,7 @@ from typing import Any
 from minio import Minio
 
 from pipeline.bronze import paths
-from pipeline.bronze.ingest import read_object
+from pipeline.bronze.ingest import ingest_dates, read_object
 from pipeline.bronze.sweep import read_manifest
 from pipeline.clock import wib_date
 from pipeline.config import BRONZE_BUCKET
@@ -46,6 +46,8 @@ class ExpectedUniverse:
     as_of: date
     stale_days: int
     authority_key: str
+    # days the snapshot postdates the trade date, backfill only
+    retro_days: int = 0
 
 
 def listing_date(row: dict[str, Any]) -> date | None:
@@ -121,6 +123,25 @@ def newest_snapshot(minio: Minio, allowed_as_of: frozenset[date]) -> tuple[str, 
     raise UniverseUnavailable(f"no company_profile snapshot captured on {allowed or 'any allowed date'}")
 
 
+def earliest_snapshot_after(minio: Minio, trade_date: date) -> tuple[str, date]:
+    """The closest profile snapshot taken after the date, or fails closed."""
+    prefix = f"{PROFILE_SOURCE}/{PROFILE_DATASET}/"
+    for captured_on in sorted(d for d in ingest_dates(minio, prefix) if d > trade_date):
+        key = _snapshot_key(minio, captured_on)
+        if key is not None:
+            return key, captured_on
+    raise UniverseUnavailable(f"no company_profile snapshot captured after {trade_date.isoformat()}")
+
+
+def _authority(
+    minio: Minio, trade_date: date, allowed_as_of: frozenset[date], retro: bool
+) -> tuple[str, date]:
+    """The allowed snapshot, or for a backfill without a same day one the next later one."""
+    if retro and _snapshot_key(minio, trade_date) is None:
+        return earliest_snapshot_after(minio, trade_date)
+    return newest_snapshot(minio, allowed_as_of)
+
+
 def capture_date(manifest: dict[str, Any]) -> date:
     """The WIB day a landing actually pulled its bytes, from its own capture stamp."""
     stamped = str(manifest.get("requested_at") or "")
@@ -150,9 +171,10 @@ def expected_universe(
     *,
     allowed_as_of: frozenset[date],
     min_securities: int = MIN_PLAUSIBLE_SECURITIES,
+    retro: bool = False,
 ) -> ExpectedUniverse:
     """The securities that should appear in the day's trade payload, or fails closed."""
-    key, as_of = newest_snapshot(minio, allowed_as_of)
+    key, as_of = _authority(minio, trade_date, allowed_as_of, retro)
     _assert_captured_when_filed(minio, key, as_of)
     try:
         raw = read_object(minio, key)
@@ -167,6 +189,7 @@ def expected_universe(
     return ExpectedUniverse(
         tickers=frozenset(tickers),
         as_of=as_of,
-        stale_days=(trade_date - as_of).days,
+        stale_days=max(0, (trade_date - as_of).days),
         authority_key=key,
+        retro_days=max(0, (as_of - trade_date).days),
     )

@@ -621,3 +621,151 @@ def test_a_transport_truncated_day_can_still_be_universe_complete(
     assert final["status"] == "PARTIAL"
     assert "upstream declared 959 rows, 957 arrived" in final["notes"]
     assert "coverage 957 of 957 expected securities" in final["notes"]
+
+
+# ------------------------------------------------------- backfill retro authority
+
+
+OLD, LATER, LATEST = date(2026, 9, 17), date(2026, 10, 11), date(2026, 10, 12)
+
+
+def test_retro_is_off_unless_asked_for(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A later capture exists, but the normal path still refuses it outright."""
+    fake = FakeMinio()
+    land_live(monkeypatch, fake, PROFILES, LATER, _profiles([_equity("AADI")]), captured_on=LATER)
+
+    with pytest.raises(universe.UniverseUnavailable, match="no company_profile snapshot"):
+        universe.expected_universe(fake, OLD, allowed_as_of=frozenset({OLD}), min_securities=1)
+
+
+def test_retro_takes_the_closest_later_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The nearest capture after the day has the fewest lifecycle events to rewind."""
+    fake = FakeMinio()
+    land_live(monkeypatch, fake, PROFILES, LATEST, _profiles([_equity("AADI")]), captured_on=LATEST)
+    land_live(monkeypatch, fake, PROFILES, LATER, _profiles([_equity("AADI")]), captured_on=LATER)
+
+    result = universe.expected_universe(
+        fake, OLD, allowed_as_of=frozenset({OLD}), min_securities=1, retro=True
+    )
+
+    assert result.as_of == LATER
+    assert result.retro_days == 24
+    assert result.stale_days == 0
+
+
+def test_retro_ignores_captures_from_before_the_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a later list can be rewound, an older one is the stale case it replaces."""
+    fake = FakeMinio()
+    earlier = date(2026, 9, 16)
+    land_live(monkeypatch, fake, PROFILES, earlier, _profiles([_equity("AADI")]), captured_on=earlier)
+
+    with pytest.raises(universe.UniverseUnavailable, match="captured after 2026-09-17"):
+        universe.expected_universe(
+            fake, OLD, allowed_as_of=frozenset({OLD, earlier}), min_securities=1, retro=True
+        )
+
+
+def test_retro_still_prefers_a_genuine_same_day_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the day really was captured, nothing gets rewound and nothing gets flagged."""
+    fake = FakeMinio()
+    land_live(monkeypatch, fake, PROFILES, OLD, _profiles([_equity("AADI")]), captured_on=OLD)
+    land_live(monkeypatch, fake, PROFILES, LATER, _profiles([_equity("AADI")]), captured_on=LATER)
+
+    result = universe.expected_universe(
+        fake, OLD, allowed_as_of=frozenset({OLD}), min_securities=1, retro=True
+    )
+
+    assert result.as_of == OLD
+    assert result.retro_days == 0
+
+
+def test_retro_with_no_later_capture_fails_closed() -> None:
+    """Backfill mode loosens which day may answer, never whether one has to."""
+    with pytest.raises(universe.UniverseUnavailable, match="captured after"):
+        universe.expected_universe(
+            FakeMinio(), OLD, allowed_as_of=frozenset({OLD}), min_securities=1, retro=True
+        )
+
+
+def test_retro_still_refuses_a_mislabelled_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The later list has to prove it was taken on the day it is filed under."""
+    fake = FakeMinio()
+    land_live(monkeypatch, fake, PROFILES, LATER, _profiles([_equity("AADI")]), captured_on=LATER)
+    key = next(k for k in fake.objects if k.startswith("_manifests/"))
+    manifest = json.loads(fake.objects[key])
+    manifest["requested_at"] = "2026-10-20T05:00:00Z"
+    fake.objects[key] = json.dumps(manifest).encode()
+
+    with pytest.raises(universe.UniverseUnavailable, match="was captured 2026-10-20"):
+        universe.expected_universe(
+            fake, OLD, allowed_as_of=frozenset({OLD}), min_securities=1, retro=True
+        )
+
+
+def test_retro_drops_a_listing_that_came_after_the_day() -> None:
+    """A security that listed later cannot be missing from the day being judged."""
+    rows = [_equity("AADI"), _equity("NEWO", listed="2026-10-01T00:00:00")]
+    assert universe.equity_tickers({"data": rows}, OLD) == {"AADI"}
+
+
+def test_rewinding_restores_a_security_delisted_after_the_day() -> None:
+    """It traded on the day, so the later list leaving it out must not hide its absence."""
+    snapshot = _universe(["AADI"], as_of=LATER)
+    events = _events([_event("GONE", "2026-10-01T00:00:00", "delist")])
+
+    expected = coverage.apply_lifecycle(snapshot, events, OLD)
+
+    assert expected.tickers == frozenset({"AADI", "GONE"})
+    assert coverage.evaluate(expected, {"AADI"}).missing_tickers == ["GONE"]
+
+
+def test_rewinding_keeps_out_a_security_delisted_before_the_day() -> None:
+    """Gone before the day means not expected on it, whichever way the snapshot moves."""
+    snapshot = _universe(["AADI"], as_of=LATER)
+    events = _events([_event("OLDY", "2026-09-01T00:00:00", "delist")])
+    assert coverage.apply_lifecycle(snapshot, events, OLD).tickers == frozenset({"AADI"})
+
+
+def test_rewinding_removes_a_listing_event_after_the_day() -> None:
+    """A later list carries later IPOs even when their profile row has no listing date."""
+    snapshot = _universe(["AADI", "NEWO"], as_of=LATER)
+    events = _events([_event("NEWO", "2026-10-01T00:00:00", "ipo")])
+    assert coverage.apply_lifecycle(snapshot, events, OLD).tickers == frozenset({"AADI"})
+
+
+def test_the_rewind_window_includes_the_capture_day_and_excludes_the_trade_day() -> None:
+    """Effective on the day itself means already gone, effective on capture day still counts."""
+    snapshot = _universe(["AADI"], as_of=LATER)
+    events = _events([
+        _event("ONDY", "2026-09-17T00:00:00", "delist"),
+        _event("ONCP", "2026-10-11T00:00:00", "delist"),
+    ])
+    assert coverage.apply_lifecycle(snapshot, events, OLD).tickers == frozenset({"AADI", "ONCP"})
+
+
+def test_retro_measure_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A landed old day measured against a later capture reports full, retro coverage."""
+    fake = FakeMinio()
+    land_live(monkeypatch, fake, DAILY_TRADE, OLD, _trades(["AADI", "BBCA"]), captured_on=LATER)
+    land_live(
+        monkeypatch, fake, PROFILES, LATER, _profiles([_equity("AADI"), _equity("BBCA")]),
+        captured_on=LATER,
+    )
+
+    result = coverage.measure(
+        fake, DAILY_TRADE, OLD, allowed_as_of=frozenset({OLD}), min_securities=1, retro=True
+    )
+
+    assert result.coverage_ratio == 1.0
+    assert result.retro_days == 24
+    assert result.stale_days == 0
+
+
+def test_retro_coverage_says_so_in_the_manifest_notes() -> None:
+    """The flag and the prose have to agree, so nobody reads a backfill as a live day."""
+    result = coverage.CoverageResult(
+        expected_universe=2, observed_universe=2, missing_tickers=[], coverage_ratio=1.0,
+        as_of=LATER, stale_days=0, authority_key="key", retro_days=24,
+    )
+    assert "backfill, captured 24d after the date" in revise.coverage_notes(result)
+    assert "stale" not in revise.coverage_notes(result)

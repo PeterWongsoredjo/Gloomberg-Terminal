@@ -74,6 +74,11 @@ def listed_between(events: list[LifecycleEvent], after: date, through: date) -> 
     return {e.ticker for e in events if not e.is_delisting and after < e.effective <= through}
 
 
+def delisted_between(events: list[LifecycleEvent], after: date, through: date) -> set[str]:
+    """Securities that stopped trading in the gap, so they were still listed before it."""
+    return {e.ticker for e in events if e.is_delisting and after < e.effective <= through}
+
+
 def newest_events(minio: Minio) -> list[LifecycleEvent]:
     """Reads the freshest action feed landed, empty when none ever landed."""
     keys = [

@@ -19,6 +19,7 @@ from pipeline.bronze.ingest import read_object, run_id_for
 from pipeline.config import BRONZE_BUCKET
 from pipeline.quality.lifecycle import (
     LifecycleEvent,
+    delisted_between,
     delisted_through,
     listed_between,
     newest_events,
@@ -37,6 +38,7 @@ class CoverageResult:
     as_of: date
     stale_days: int
     authority_key: str
+    retro_days: int = 0
 
 
 def observed_tickers(raw: bytes) -> set[str]:
@@ -60,6 +62,7 @@ def evaluate(expected: ExpectedUniverse, observed: set[str]) -> CoverageResult:
         as_of=expected.as_of,
         stale_days=expected.stale_days,
         authority_key=expected.authority_key,
+        retro_days=expected.retro_days,
     )
 
 
@@ -82,10 +85,21 @@ def landed_tickers(minio: Minio, spec: FeedSpec, trade_date: date) -> set[str]:
 def apply_lifecycle(
     snapshot: ExpectedUniverse, events: list[LifecycleEvent], trade_date: date
 ) -> ExpectedUniverse:
-    """Moves the snapshot forward to the date: listings in the gap in, delistings out."""
+    """Moves the snapshot to the date, whichever side of it the capture was taken on."""
+    if snapshot.as_of > trade_date:
+        return _rewind(snapshot, events, trade_date)
     joined = listed_between(events, snapshot.as_of, trade_date)
     left = delisted_through(events, trade_date)
     return replace(snapshot, tickers=frozenset((snapshot.tickers | joined) - left))
+
+
+def _rewind(
+    snapshot: ExpectedUniverse, events: list[LifecycleEvent], trade_date: date
+) -> ExpectedUniverse:
+    """Moves a later snapshot back: later listings out, later delistings back in."""
+    arrived = listed_between(events, trade_date, snapshot.as_of)
+    departed = delisted_between(events, trade_date, snapshot.as_of)
+    return replace(snapshot, tickers=frozenset((snapshot.tickers | departed) - arrived))
 
 
 def measure(
@@ -95,10 +109,11 @@ def measure(
     *,
     allowed_as_of: frozenset[date],
     min_securities: int,
+    retro: bool = False,
 ) -> CoverageResult:
     """Measures one universe feed's coverage for a date, or fails closed."""
     snapshot = expected_universe(
-        minio, trade_date, allowed_as_of=allowed_as_of, min_securities=min_securities
+        minio, trade_date, allowed_as_of=allowed_as_of, min_securities=min_securities, retro=retro
     )
     expected = apply_lifecycle(snapshot, newest_events(minio), trade_date)
     return evaluate(expected, landed_tickers(minio, spec, trade_date))

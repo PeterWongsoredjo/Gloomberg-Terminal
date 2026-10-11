@@ -19,7 +19,8 @@ export type QualityFlag =
   | "SUSPENDED"
   | "DERIVED_ESTIMATE"
   | "LLM_LOW_CONFIDENCE"
-  | "SCHEMA_DRIFT_QUARANTINE";
+  | "SCHEMA_DRIFT_QUARANTINE"
+  | "RETRO_AUTHORITY";
 
 /** CT-011 — the only shape a serving payload may take, field names mirror the wire JSON verbatim. */
 export interface Envelope<TData> {

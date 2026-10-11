@@ -28,6 +28,7 @@ from orchestration.results import PhaseResult
 UNIVERSE_FEEDS = [name for name, spec in FEEDS.items() if spec.is_universe]
 
 STALE_AUTHORITY = "same-day company-profile authority unavailable"
+RETRO_AUTHORITY = "backfill measured against a later company-profile capture"
 
 
 def coverage_status(
@@ -46,6 +47,8 @@ def quality_flags(result: CoverageResult, floor: float) -> list[str]:
     flags = []
     if result.stale_days > 0:
         flags.append("STALE")
+    if result.retro_days > 0:
+        flags.append("RETRO_AUTHORITY")
     if result.coverage_ratio < floor:
         flags.append("COVERAGE_GAP")
     return flags
@@ -135,6 +138,7 @@ def evaluate_coverage(
     worst_result = min(results.values(), key=lambda r: r.coverage_ratio)
     missing = sorted({t for r in results.values() for t in r.missing_tickers})
     stale = max(r.stale_days for r in results.values())
+    retro = max(r.retro_days for r in results.values())
     degraded = _side_feed_degraded(manifests, trade_date) or any(
         result_degraded(r) for r in results.values()
     )
@@ -158,6 +162,7 @@ def evaluate_coverage(
         "observed_universe": worst_result.observed_universe,
         "universe_as_of": worst_result.as_of.isoformat(),
         "universe_stale_days": stale,
+        "universe_retro_days": retro,
     }
     verb = "promote" if promotion_ok else "blocked"
     notes = (
@@ -170,6 +175,11 @@ def evaluate_coverage(
         notes += (
             f"; {STALE_AUTHORITY}: newest is {worst_result.as_of.isoformat()}, "
             f"{stale}d before {trade_date.isoformat()}"
+        )
+    if retro:
+        notes += (
+            f"; {RETRO_AUTHORITY}: newest is {worst_result.as_of.isoformat()}, "
+            f"{retro}d after {trade_date.isoformat()}"
         )
     if transport != "SUCCESS":
         notes += "; upstream sent fewer rows than it declared"
@@ -188,6 +198,7 @@ def measure_and_revise(
     hard_min: float,
     min_securities: int,
     calendar_seed: Path,
+    retro: bool = False,
 ) -> dict[str, CoverageResult]:
     """Measures every universe feed for the date and stamps each one's manifest."""
     settings = get_settings()
@@ -197,7 +208,8 @@ def measure_and_revise(
     for name in UNIVERSE_FEEDS:
         spec = FEEDS[name]
         result = measure(
-            minio, spec, trade_date, allowed_as_of=allowed_as_of, min_securities=min_securities
+            minio, spec, trade_date,
+            allowed_as_of=allowed_as_of, min_securities=min_securities, retro=retro,
         )
         status = coverage_status(
             result.coverage_ratio,
@@ -218,14 +230,15 @@ def run_coverage_gate(
     hard_min: float,
     min_securities: int,
     calendar_seed: Path,
+    retro: bool = False,
 ) -> PhaseResult:
-    """The one promotion decision, shared by the daily flow and the hourly resweep."""
+    """The one promotion decision, shared by the daily flow, the resweep and the backfill."""
     gave_up = failed_universe_feeds(manifests, trade_date)
     if gave_up:
         return blocked(f"universe feed never landed: {', '.join(gave_up)}")
     try:
         results = measure_and_revise(
-            trade_date, floor, hard_min, min_securities, calendar_seed
+            trade_date, floor, hard_min, min_securities, calendar_seed, retro=retro
         )
     except UniverseUnavailable as exc:
         return blocked(f"expected universe unavailable: {exc}")
