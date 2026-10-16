@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # keep the pinned github actions fresh, once a week
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

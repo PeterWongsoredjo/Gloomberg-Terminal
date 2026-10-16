@@ -9,3 +9,7 @@ import os
 
 os.environ["GLOOMBERG_API_TOKEN"] = ""
 os.environ["GLOOMBERG_RATE_LIMIT"] = ""
+
+# keep tests off the real langfuse
+os.environ["LANGFUSE_PUBLIC_KEY"] = ""
+os.environ["LANGFUSE_SECRET_KEY"] = ""
