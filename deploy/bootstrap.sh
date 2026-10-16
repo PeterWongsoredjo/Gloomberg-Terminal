@@ -110,7 +110,6 @@ runuser -u "$APP_USER" -- bash -c "cd '$REPO/services/orchestration' \
 systemctl enable --now gloomberg-prefect-worker.service
 
 say "backup cron"
-chmod 755 "$REPO/deploy/backup/gloomberg-backup.sh"
 install -m 644 "$REPO/deploy/backup/gloomberg-backup.cron" /etc/cron.d/gloomberg-backup
 
 say "deploy access, the ci key may only run the deploy script"
