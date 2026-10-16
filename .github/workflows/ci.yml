@@ -1,0 +1,202 @@
+name: ci
+
+# run checks on every push, every pull request, or by hand
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# a newer push on the same branch cancels the old run
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# jobs can only read the repo, nothing else
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # one python job per service, they run side by side
+  python:
+    name: python (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend-api
+            code: app
+          - service: data-pipeline
+            code: src
+          - service: orchestration
+            code: src
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # same uv as the dev box, with a dependency cache
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.7.8"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: services/${{ matrix.service }}/uv.lock
+
+      # install exactly what the lockfile says, plus dev tools
+      - run: uv sync --frozen --extra dev
+
+      # lint, then strict types, then tests
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync mypy ${{ matrix.code }}
+      - run: uv run --no-sync pytest -q
+
+      # security lint, only warns until the refactor cleans it up
+      - name: security lint (monitor)
+        continue-on-error: true
+        run: uv run --no-sync ruff check --select S .
+
+  # dbt has no data in ci, so we only check the project parses
+  dbt:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dbt
+    # fake creds, parse never connects to anything
+    env:
+      MINIO_KEY: ci
+      MINIO_SECRET: ci
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci
+      BQ_PROJECT: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.7.8"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: dbt/uv.lock
+
+      - run: uv sync --frozen
+      - run: uv run --no-sync dbt deps --profiles-dir .
+
+      # the main lakehouse project
+      - run: uv run --no-sync dbt parse --profiles-dir .
+
+      # the bigquery analyst project, same python env
+      - run: uv run --no-sync --project .. dbt parse --profiles-dir .
+        working-directory: dbt/bigquery
+
+  # the next.js terminal, types then lint then tests then a real build
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web-terminal
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/web-terminal/package-lock.json
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test
+
+      # the token stays empty, anything public lands in the browser
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE: ${{ vars.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/api/v1' }}
+          NEXT_PUBLIC_API_TOKEN: ""
+
+  # look for leaked keys in the commits, this one blocks
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  # scan deps for known holes, only warns, never blocks
+  sca:
+    name: sca (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend-api
+            dir: services/backend-api
+            kind: uv
+          - name: data-pipeline
+            dir: services/data-pipeline
+            kind: uv
+          - name: orchestration
+            dir: services/orchestration
+            kind: uv
+          - name: dbt
+            dir: dbt
+            kind: uv
+          - name: web-terminal
+            dir: services/web-terminal
+            kind: npm
+    # bash here makes a found hole fail the step, so it shows as a warning
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: matrix.kind == 'uv'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.7.8"
+          python-version: "3.12"
+
+      # turn the lockfile into a plain list, minus our own local packages
+      - if: matrix.kind == 'uv'
+        run: |
+          uv export --frozen --no-hashes --no-emit-project --no-emit-workspace \
+            | grep -vE '^-e |file://' > "$RUNNER_TEMP/requirements.txt"
+
+      # check that list against known vulnerabilities, report in the run summary
+      - if: matrix.kind == 'uv'
+        run: |
+          uvx pip-audit==2.10.1 --no-deps --disable-pip -f markdown \
+            -r "$RUNNER_TEMP/requirements.txt" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # npm reads the lockfile directly, production deps only
+      - if: matrix.kind == 'npm'
+        run: npm audit --omit=dev | tee -a "$GITHUB_STEP_SUMMARY"
