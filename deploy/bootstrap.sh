@@ -16,12 +16,7 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [ -f "$REPO/.env" ] || die "copy the operator .env to $REPO/.env first, see docs/DEPLOYMENT.md"
 
 say "checking required .env variables"
-missing=0
-for key in GLOOMBERG_DOMAIN MINIO_KEY MINIO_SECRET POSTGRES_USER POSTGRES_PASSWORD \
-    GROQ_API_KEY GOOGLE_AI_STUDIO_API_KEY GLOOMBERG_API_TOKEN GLOOMBERG_ORCH_BACKEND_API_TOKEN; do
-    grep -qE "^${key}[[:space:]]*=[[:space:]]*." "$REPO/.env" || { echo "missing in .env: $key"; missing=1; }
-done
-[ "$missing" -eq 0 ] || die "fill the variables above, then re-run"
+bash "$REPO/deploy/check-env.sh" "$REPO/.env" || die "fill the variables above, then re-run"
 GLOOMBERG_DOMAIN="$(grep -E '^GLOOMBERG_DOMAIN=' "$REPO/.env" | head -1 | cut -d= -f2-)"
 
 say "timezone Asia/Jakarta"
@@ -83,6 +78,11 @@ say "web terminal build, NEXT_PUBLIC values are baked in here"
 runuser -u "$APP_USER" -- bash -c "cd '$REPO/services/web-terminal' && npm ci \
     && NEXT_PUBLIC_API_BASE=\"https://${GLOOMBERG_DOMAIN}/api/v1\" NEXT_PUBLIC_API_TOKEN='' npm run build"
 
+say "web release folder, the web unit runs whatever web-current points at"
+runuser -u "$APP_USER" -- mkdir -p /opt/gloomberg/web-releases
+[ -e /opt/gloomberg/web-current ] \
+    || runuser -u "$APP_USER" -- ln -s "$REPO/services/web-terminal" /opt/gloomberg/web-current
+
 say "systemd units and caddy config"
 cp "$REPO"/deploy/systemd/*.service /etc/systemd/system/
 cp "$REPO/deploy/caddy/Caddyfile" /etc/caddy/Caddyfile
@@ -112,6 +112,25 @@ systemctl enable --now gloomberg-prefect-worker.service
 say "backup cron"
 chmod 755 "$REPO/deploy/backup/gloomberg-backup.sh"
 install -m 644 "$REPO/deploy/backup/gloomberg-backup.cron" /etc/cron.d/gloomberg-backup
+
+say "deploy access, the ci key may only run the deploy script"
+install -m 755 "$REPO/deploy/gloomberg-deploy.sh" /usr/local/bin/gloomberg-deploy
+install -m 755 "$REPO/deploy/check-env.sh" /usr/local/bin/gloomberg-check-env
+visudo -cf "$REPO/deploy/sudoers/gloomberg-deploy" >/dev/null || die "deploy/sudoers/gloomberg-deploy is invalid"
+install -m 440 "$REPO/deploy/sudoers/gloomberg-deploy" /etc/sudoers.d/gloomberg-deploy
+if [ -f /opt/gloomberg/deploy_key.pub ]; then
+    install -d -m 700 -o "$APP_USER" -g "$APP_USER" "$APP_HOME/.ssh"
+    install -m 600 -o "$APP_USER" -g "$APP_USER" /dev/null "$APP_HOME/.ssh/authorized_keys.new"
+    [ -f "$APP_HOME/.ssh/authorized_keys" ] && cat "$APP_HOME/.ssh/authorized_keys" > "$APP_HOME/.ssh/authorized_keys.new"
+    deploy_key="$(cat /opt/gloomberg/deploy_key.pub)"
+    grep -qF "$deploy_key" "$APP_HOME/.ssh/authorized_keys.new" \
+        || printf 'restrict,command="/usr/local/bin/gloomberg-deploy" %s\n' "$deploy_key" >> "$APP_HOME/.ssh/authorized_keys.new"
+    mv "$APP_HOME/.ssh/authorized_keys.new" "$APP_HOME/.ssh/authorized_keys"
+    echo "deploy key installed for $APP_USER"
+else
+    echo "no /opt/gloomberg/deploy_key.pub yet, skipping the deploy key"
+fi
+runuser -u "$APP_USER" -- /usr/local/bin/gloomberg-deploy --manifest > /opt/gloomberg/.installed.sha256
 
 say "verifying"
 sleep 3

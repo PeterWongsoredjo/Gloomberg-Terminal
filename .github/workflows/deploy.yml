@@ -1,0 +1,60 @@
+name: deploy
+
+# deploy main after ci passes, or redeploy any main commit by hand
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: full commit sha on main to deploy
+        required: true
+
+# one deploy at a time, a new one waits instead of killing the running one
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# the job only reads, the vps does the work
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # only green ci runs that came from a real push to main
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    # this is where it waits for peter to click approve
+    environment: production
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+    steps:
+      # put the deploy key and the known vps fingerprint on disk, only we can read them
+      - name: prepare ssh
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          printf '%s\n' "$VPS_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+
+      # hand the vps the commit and the env file, its deploy script does the rest
+      - name: deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          PRODUCTION_ENV: ${{ secrets.PRODUCTION_ENV }}
+        run: |
+          printf '%s\n' "$PRODUCTION_ENV" | ssh -i "$RUNNER_TEMP/deploy_key" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+            "gloomberg@$VPS_HOST" "$SHA"
+
+      # never leave the key behind on the runner
+      - name: clean up
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/known_hosts"

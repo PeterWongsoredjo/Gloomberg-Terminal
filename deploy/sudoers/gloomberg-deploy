@@ -1,0 +1,5 @@
+# the deploy script may restart these three app services and nothing else
+Cmnd_Alias GLOOMBERG_RESTART = /usr/bin/systemctl restart gloomberg-backend.service, \
+                               /usr/bin/systemctl restart gloomberg-web.service, \
+                               /usr/bin/systemctl restart gloomberg-prefect-worker.service
+gloomberg ALL=(root) NOPASSWD: GLOOMBERG_RESTART
