@@ -169,8 +169,10 @@ jobs:
           - name: web-terminal
             dir: services/web-terminal
             kind: npm
+    # bash here makes a found hole fail the step, so it shows as a warning
     defaults:
       run:
+        shell: bash
         working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
