@@ -128,6 +128,21 @@ jobs:
           NEXT_PUBLIC_API_BASE: ${{ vars.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/api/v1' }}
           NEXT_PUBLIC_API_TOKEN: ""
 
+  # lint the deploy scripts and run the deploy script against a fake box
+  deploy-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.7.8"
+
+      - run: uvx --from shellcheck-py==0.11.0.1 shellcheck -S warning deploy/*.sh
+      - run: bash deploy/test-deploy.sh "$PWD"
+
   # look for leaked keys in the commits, this one blocks
   secrets:
     runs-on: ubuntu-latest

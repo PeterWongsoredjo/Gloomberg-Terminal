@@ -5,7 +5,7 @@ Wants=gloomberg-backend.service
 
 [Service]
 User=gloomberg
-WorkingDirectory=/opt/gloomberg/Gloomberg-Terminal/services/web-terminal
+WorkingDirectory=/opt/gloomberg/web-current
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
 Restart=on-failure
