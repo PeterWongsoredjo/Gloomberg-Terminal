@@ -8,9 +8,9 @@ from datetime import date
 
 from prefect import task
 
-from pipeline.bronze.dividend_text import filing_texts
-from pipeline.bronze.ingest import client
-from pipeline.bronze.news import day_items, tag_items
+from pipeline.bronze.dividends.text import filing_texts
+from pipeline.bronze.core.store import client
+from pipeline.bronze.news.parse import day_items, tag_items
 from pipeline.config import get_settings
 from pipeline.gold.cash_dividend_news import read_items as read_cash_dividend_items
 from pipeline.gold.corporate_action_news import read_items as read_corporate_action_items

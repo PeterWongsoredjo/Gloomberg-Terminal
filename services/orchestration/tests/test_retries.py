@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from prefect.states import Completed, Failed
 
-from pipeline.bronze.ingest import FetchError
+from pipeline.bronze.core.http import FetchError
 
 from orchestration.errors import DbtTestFailure, DbtTransientError, TriggerTransientError
 from orchestration.retries import (

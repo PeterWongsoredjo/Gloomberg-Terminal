@@ -1,12 +1,3 @@
-"""
-Reads the text out of the landed dividend filings and lands it back in Bronze.
-
-Filings come as two documents, a small text one and a large scanned appendix. Only
-the text one yields anything, so the scan is recorded as empty rather than dropped.
-
-Landing the text means a better prompt later never has to re-download the pdfs.
-"""
-
 from __future__ import annotations
 
 import io
@@ -17,15 +8,16 @@ from typing import Any
 from minio import Minio
 from pypdf import PdfReader
 
-from pipeline.bronze.dividends import LIST_FEED, read_index
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import client, land_payloads, read_object
-from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
+from pipeline.bronze.dividends.announcements import LIST_FEED, read_index
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.land import land_payloads
+from pipeline.bronze.core.store import client, read_object
+from pipeline.bronze.core.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
 TEXT_DATASET = "dividend_filing_text"
 
-# below this a filing is a scan, not a document we can read
+# below this a filing is a scan, not readable text
 MIN_TEXT_CHARS = 200
 
 
@@ -44,7 +36,6 @@ def _text_row(
     page_count: int = 0,
     reason: str = "",
 ) -> dict[str, Any]:
-    """One row saying what reading one landed document produced."""
     return {
         "attachment_id": entry["attachment_id"],
         "ticker": entry["ticker"],
@@ -114,7 +105,6 @@ def land_filing_text(minio: Minio, trade_date: date) -> dict[str, Any] | None:
 
 
 def main() -> None:
-    """CLI: read a trade_date's landed dividend filings into Bronze."""
     import sys
 
     settings: Settings = get_settings()

@@ -1,13 +1,9 @@
-"""
-Prunes superseded Bronze manifests, the newest per scope always survives.
-"""
-
 from __future__ import annotations
 
 import argparse
 from datetime import date, datetime, timedelta
 
-from pipeline.bronze.ingest import client
+from pipeline.bronze.core.store import client
 from pipeline.config import BRONZE_BUCKET, get_settings
 
 MANIFESTS_PREFIX = "_manifests/"
@@ -50,7 +46,6 @@ def prune_candidates(
 
 
 def main() -> None:
-    """CLI: list prune candidates, delete them only with the apply flag."""
     parser = argparse.ArgumentParser(description="prune superseded Bronze manifests")
     parser.add_argument("--apply", action="store_true", help="delete instead of dry run")
     parser.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS)

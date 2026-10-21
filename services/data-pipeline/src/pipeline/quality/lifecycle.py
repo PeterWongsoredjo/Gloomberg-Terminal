@@ -15,7 +15,7 @@ from typing import Any
 
 from minio import Minio
 
-from pipeline.bronze.ingest import read_object
+from pipeline.bronze.core.store import read_object
 from pipeline.config import BRONZE_BUCKET
 from pipeline.reference.securities import TICKER_RE
 

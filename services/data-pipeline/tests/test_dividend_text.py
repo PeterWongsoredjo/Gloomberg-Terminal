@@ -11,8 +11,8 @@ from typing import Any, cast
 import pytest
 from pypdf import PdfWriter
 
-from pipeline.bronze import dividend_text
-from pipeline.bronze.dividend_text import extract_text, filing_texts, land_filing_text
+from pipeline.bronze.dividends import text as dividend_text
+from pipeline.bronze.dividends.text import extract_text, filing_texts, land_filing_text
 
 TD = date(2026, 7, 31)
 

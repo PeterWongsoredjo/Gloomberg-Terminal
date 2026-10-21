@@ -14,7 +14,7 @@ from pathlib import Path
 
 from prefect import task
 
-from pipeline.bronze.ingest import client
+from pipeline.bronze.core.store import client
 from pipeline.config import get_settings
 
 from orchestration.calendar import is_trading_day

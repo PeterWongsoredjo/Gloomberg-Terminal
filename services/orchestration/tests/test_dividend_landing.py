@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from pipeline.bronze.dividends import PDF_DATASET
+from pipeline.bronze.dividends.announcements import PDF_DATASET
 
 from orchestration.tasks import documents
 

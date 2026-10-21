@@ -16,8 +16,8 @@ from prefect import flow
 from prefect.runtime import flow_run
 from prefect.task_runners import ThreadPoolTaskRunner
 
-from pipeline.bronze.feeds import NEWS_FEEDS
-from pipeline.bronze.ingest import FetchError
+from pipeline.bronze.core.feeds import NEWS_FEEDS
+from pipeline.bronze.core.http import FetchError
 from pipeline.config import get_settings
 
 from orchestration.clock import coerce_date, now_utc

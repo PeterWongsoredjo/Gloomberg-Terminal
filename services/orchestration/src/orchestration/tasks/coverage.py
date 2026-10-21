@@ -13,10 +13,10 @@ from typing import Any
 from minio import Minio
 from prefect import task
 
-from pipeline.bronze.feeds import FEEDS, UNIVERSE_PAIRS
-from pipeline.bronze.ingest import client
-from pipeline.bronze.manifest import coverage_evaluated
-from pipeline.bronze.sweep import read_manifest
+from pipeline.bronze.core.feeds import FEEDS, UNIVERSE_PAIRS
+from pipeline.bronze.core.store import client
+from pipeline.bronze.core.manifest import coverage_evaluated
+from pipeline.bronze.ops.sweep import read_manifest
 from pipeline.config import get_settings
 from pipeline.quality.coverage import CoverageResult, measure
 from pipeline.quality.revise import revise_manifest, transport_status, worst

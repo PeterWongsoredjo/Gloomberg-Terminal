@@ -10,7 +10,7 @@ from typing import Any
 
 import psycopg
 
-from pipeline.bronze.manifest import iso_utc
+from pipeline.bronze.core.manifest import iso_utc
 
 SCHEMA_VERSION = "1.0.0"
 

@@ -36,4 +36,7 @@ Thumbs.db
 docs/
 *.md
 
+# Obsidian learning vault (notes + .obsidian config)
+vault/
+
 /v0

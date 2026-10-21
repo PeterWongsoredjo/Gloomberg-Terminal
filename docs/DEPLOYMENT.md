@@ -157,7 +157,7 @@ Watch it in the Prefect UI (SSH tunnel). It should end `SUCCESS` with
 | TLS certificate status | `journalctl -u caddy | grep -i cert` — renewal is automatic |
 | Update code | Push to `main`, approve the deploy in GitHub Actions (§10). Manual fallback: `git -C /opt/gloomberg/Gloomberg-Terminal checkout main && git pull` as `gloomberg`, then `sudo bash deploy/bootstrap.sh` |
 | Check backups ran | `tail /var/log/gloomberg-backup.log`; sets live under `/var/backups/gloomberg/daily/<date>/` |
-| Prune old manifests manually | `sudo -u gloomberg bash -c 'cd .../services/data-pipeline && uv run python -m pipeline.bronze.retention'` (dry run; add `--apply` to delete) |
+| Prune old manifests manually | `sudo -u gloomberg bash -c 'cd .../services/data-pipeline && uv run python -m pipeline.bronze.ops.retention'` (dry run; add `--apply` to delete) |
 
 ## 7. Backups and restore
 

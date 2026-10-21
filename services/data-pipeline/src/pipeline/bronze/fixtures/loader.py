@@ -1,7 +1,3 @@
-"""
-loads raw offline data fixtures and imports to MinIO bronze bucket
-"""
-
 from __future__ import annotations
 
 import json
@@ -12,14 +8,11 @@ from typing import Any
 
 from minio import Minio
 
-from pipeline.bronze.feeds import spec_for
-from pipeline.bronze.ingest import (
-    client,
-    land_payloads,
-    landing_verdict,
-    upstream_record_total,
-)
-from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
+from pipeline.bronze.core.feeds import spec_for
+from pipeline.bronze.core.land import land_payloads
+from pipeline.bronze.core.policy import landing_verdict, upstream_record_total
+from pipeline.bronze.core.store import client
+from pipeline.bronze.core.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import Settings, get_settings
 
 META_FILE = "_meta.json"
@@ -50,7 +43,7 @@ def load_partition(minio: Minio, part_dir: Path, kind_root: Path) -> dict[str, A
     count = int(meta["record_count"])
     declared = upstream_record_total(payloads[0], "json") if payloads else None
     status, notes = landing_verdict(spec, count, declared) if spec else ("SUCCESS", "")
-    # a committed fixture declares it was captured on the day it files under
+    # a fixture claims it was captured on its partition day
     captured_at = _declared_capture(trade_date)
 
     return land_payloads(
@@ -78,9 +71,8 @@ def load_fixtures(fixtures_root: Path, settings: Settings) -> list[dict[str, Any
 
 
 def main() -> None:
-    """CLI: load one or more fixture kind roots (default: frozen + curated + adversarial)."""
     settings = get_settings()
-    base = Path(__file__).resolve().parents[3] / "fixtures"
+    base = Path(__file__).resolve().parents[4] / "fixtures"
     roots = [Path(a) for a in sys.argv[1:]] or [
         base / "frozen",
         base / "curated",

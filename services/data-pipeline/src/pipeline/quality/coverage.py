@@ -13,9 +13,10 @@ from typing import Any
 
 from minio import Minio
 
-from pipeline.bronze import paths
-from pipeline.bronze.feeds import FeedSpec
-from pipeline.bronze.ingest import read_object, run_id_for
+from pipeline.bronze.core import store
+from pipeline.bronze.core.feeds import FeedSpec
+from pipeline.bronze.core.policy import run_id_for
+from pipeline.bronze.core.store import read_object
 from pipeline.config import BRONZE_BUCKET
 from pipeline.quality.lifecycle import (
     LifecycleEvent,
@@ -69,7 +70,7 @@ def evaluate(expected: ExpectedUniverse, observed: set[str]) -> CoverageResult:
 def landed_tickers(minio: Minio, spec: FeedSpec, trade_date: date) -> set[str]:
     """Reads back every part the day's trade run wrote, raising when it wrote none."""
     run_id = run_id_for(spec, trade_date)
-    prefix = paths.partition_prefix(spec.source, spec.dataset, trade_date, spec.source_version)
+    prefix = store.partition_prefix(spec.source, spec.dataset, trade_date, spec.source_version)
     keys = [
         obj.object_name
         for obj in minio.list_objects(BRONZE_BUCKET, prefix=prefix, recursive=True)

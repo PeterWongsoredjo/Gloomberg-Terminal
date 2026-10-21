@@ -10,10 +10,12 @@ from typing import Any, cast
 
 import pytest
 
-from pipeline.bronze import dividends, paths
-from pipeline.bronze.dividends import Attachment, land_attachments, parse_attachments
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import FetchError
+from pipeline.bronze.dividends import announcements, download, land
+from pipeline.bronze.core import store
+from pipeline.bronze.dividends.announcements import Attachment, parse_attachments
+from pipeline.bronze.dividends.land import land_attachments
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.http import FetchError
 
 TD = date(2026, 7, 31)
 PDF = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<<>>\nendobj\n"
@@ -51,7 +53,7 @@ def _capture_landings(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         calls.append(kwargs)
         return {"dataset": kwargs["dataset"], "record_count": kwargs["record_count"]}
 
-    monkeypatch.setattr(dividends, "land_payloads", fake_land)
+    monkeypatch.setattr(land, "land_payloads", fake_land)
     return calls
 
 
@@ -113,24 +115,24 @@ def test_land_attachments_indexes_every_pdf_by_its_real_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The index must point at the key the pdf actually landed at, not a guessed one."""
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: FIXTURE.read_bytes())
-    monkeypatch.setattr(dividends, "_fetch_pdf", lambda url, *, proxy: PDF)
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: FIXTURE.read_bytes())
+    monkeypatch.setattr(download, "_fetch_pdf", lambda url, *, proxy: PDF)
     calls = _capture_landings(monkeypatch)
 
     land_attachments(cast(Any, None), TD)
 
-    pdf_call = next(c for c in calls if c["dataset"] == dividends.PDF_DATASET)
-    index_call = next(c for c in calls if c["dataset"] == dividends.INDEX_DATASET)
+    pdf_call = next(c for c in calls if c["dataset"] == announcements.PDF_DATASET)
+    index_call = next(c for c in calls if c["dataset"] == announcements.INDEX_DATASET)
     assert pdf_call["ext"] == "pdf"
     assert pdf_call["record_count"] == 4
 
     rows = json.loads(index_call["payloads"][0])
-    spec = FEEDS[dividends.LIST_FEED]
+    spec = FEEDS[announcements.LIST_FEED]
     for row in rows:
         assert row["status"] == "LANDED"
-        assert row["object_key"] == paths.object_key(
+        assert row["object_key"] == store.object_key(
             spec.source,
-            dividends.PDF_DATASET,
+            announcements.PDF_DATASET,
             TD,
             spec.source_version,
             pdf_call["ingest_run_id"],
@@ -144,31 +146,31 @@ def test_land_attachments_lists_an_issuer_whose_document_was_lost(
 ) -> None:
     """A lost download must show up as a missing ticker, never as a silent success."""
     monkeypatch.setattr(
-        dividends,
+        land,
         "parse_attachments",
         lambda raw: [
             _attachment("SMDR", "https://x/a.pdf"),
             _attachment("ANTM", "https://x/b.pdf"),
         ],
     )
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: b"{}")
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: b"{}")
 
     def flaky(url: str, *, proxy: str | None) -> bytes:
         if url.endswith("b.pdf"):
             raise FetchError(403, "blocked", via_proxy=True)
         return PDF
 
-    monkeypatch.setattr(dividends, "_fetch_pdf", flaky)
+    monkeypatch.setattr(download, "_fetch_pdf", flaky)
     calls = _capture_landings(monkeypatch)
 
     land_attachments(cast(Any, None), TD)
 
-    pdf_call = next(c for c in calls if c["dataset"] == dividends.PDF_DATASET)
+    pdf_call = next(c for c in calls if c["dataset"] == announcements.PDF_DATASET)
     assert pdf_call["record_count"] == 1
     assert pdf_call["missing_tickers"] == ["ANTM"]
     assert pdf_call["expected_universe"] == 2
 
-    rows = json.loads(next(c for c in calls if c["dataset"] == dividends.INDEX_DATASET)["payloads"][0])
+    rows = json.loads(next(c for c in calls if c["dataset"] == announcements.INDEX_DATASET)["payloads"][0])
     lost = next(r for r in rows if r["ticker"] == "ANTM")
     assert lost["status"] == "MISSING" and lost["reason"]
 
@@ -176,22 +178,22 @@ def test_land_attachments_lists_an_issuer_whose_document_was_lost(
 def test_land_attachments_marks_a_total_loss_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Documents existed and none landed, so the manifest says FAILED not PARTIAL."""
     monkeypatch.setattr(
-        dividends, "parse_attachments", lambda raw: [_attachment("SMDR", "https://x/a.pdf")]
+        land, "parse_attachments", lambda raw: [_attachment("SMDR", "https://x/a.pdf")]
     )
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: b"{}")
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: b"{}")
 
     def always_blocked(url: str, *, proxy: str | None) -> bytes:
         raise FetchError(403, "blocked", via_proxy=True)
 
-    monkeypatch.setattr(dividends, "_fetch_pdf", always_blocked)
+    monkeypatch.setattr(download, "_fetch_pdf", always_blocked)
     calls = _capture_landings(monkeypatch)
 
     land_attachments(cast(Any, None), TD)
 
-    pdf_call = next(c for c in calls if c["dataset"] == dividends.PDF_DATASET)
+    pdf_call = next(c for c in calls if c["dataset"] == announcements.PDF_DATASET)
     assert pdf_call["status"] == "FAILED"
     assert pdf_call["payloads"] == []
-    rows = json.loads(next(c for c in calls if c["dataset"] == dividends.INDEX_DATASET)["payloads"][0])
+    rows = json.loads(next(c for c in calls if c["dataset"] == announcements.INDEX_DATASET)["payloads"][0])
     assert [r["status"] for r in rows] == ["MISSING"]
 
 
@@ -199,7 +201,7 @@ def test_land_attachments_skips_a_date_stage_one_never_landed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """With no announcement list there is nothing to claim, so nothing is written."""
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: None)
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: None)
     calls = _capture_landings(monkeypatch)
     assert land_attachments(cast(Any, None), TD) == []
     assert calls == []
@@ -209,7 +211,7 @@ def test_land_attachments_skips_a_day_with_nothing_announced(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An empty Replies list is a real answer and writes no pdf dataset."""
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: b'{"Replies": []}')
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: b'{"Replies": []}')
     calls = _capture_landings(monkeypatch)
     assert land_attachments(cast(Any, None), TD) == []
     assert calls == []
@@ -218,14 +220,14 @@ def test_land_attachments_skips_a_day_with_nothing_announced(
 def test_land_attachments_keeps_a_non_pdf_visible(monkeypatch: pytest.MonkeyPatch) -> None:
     """A spreadsheet attachment is recorded as skipped rather than quietly dropped."""
     monkeypatch.setattr(
-        dividends, "parse_attachments", lambda raw: [_attachment("SMDR", "https://x/a.xlsx")]
+        land, "parse_attachments", lambda raw: [_attachment("SMDR", "https://x/a.xlsx")]
     )
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: b"{}")
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: b"{}")
     calls = _capture_landings(monkeypatch)
 
     land_attachments(cast(Any, None), TD)
 
-    rows = json.loads(next(c for c in calls if c["dataset"] == dividends.INDEX_DATASET)["payloads"][0])
+    rows = json.loads(next(c for c in calls if c["dataset"] == announcements.INDEX_DATASET)["payloads"][0])
     assert rows[0]["status"] == "SKIPPED_NOT_PDF"
 
 
@@ -233,17 +235,17 @@ def test_the_work_cap_is_recorded_not_silently_dropped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Documents past the cap stay visible in the index so the gap is never invisible."""
-    many = [_attachment("SMDR", f"https://x/{i}.pdf") for i in range(dividends.MAX_ATTACHMENTS + 2)]
-    monkeypatch.setattr(dividends, "parse_attachments", lambda raw: many)
-    monkeypatch.setattr(dividends, "read_list_payload", lambda minio, td: b"{}")
-    monkeypatch.setattr(dividends, "_fetch_pdf", lambda url, *, proxy: PDF)
+    many = [_attachment("SMDR", f"https://x/{i}.pdf") for i in range(download.MAX_ATTACHMENTS + 2)]
+    monkeypatch.setattr(land, "parse_attachments", lambda raw: many)
+    monkeypatch.setattr(land, "read_list_payload", lambda minio, td: b"{}")
+    monkeypatch.setattr(download, "_fetch_pdf", lambda url, *, proxy: PDF)
     calls = _capture_landings(monkeypatch)
 
     land_attachments(cast(Any, None), TD)
 
-    rows = json.loads(next(c for c in calls if c["dataset"] == dividends.INDEX_DATASET)["payloads"][0])
+    rows = json.loads(next(c for c in calls if c["dataset"] == announcements.INDEX_DATASET)["payloads"][0])
     assert sum(1 for r in rows if r["status"] == "SKIPPED_CAP") == 2
-    assert sum(1 for r in rows if r["status"] == "LANDED") == dividends.MAX_ATTACHMENTS
+    assert sum(1 for r in rows if r["status"] == "LANDED") == download.MAX_ATTACHMENTS
 
 
 def test_a_blocked_download_is_retried_until_a_fresh_ip_works(
@@ -259,8 +261,8 @@ def test_a_blocked_download_is_retried_until_a_fresh_ip_works(
             raise FetchError(403, "blocked", via_proxy=True)
         return PDF
 
-    monkeypatch.setattr(dividends, "fetch", flaky)
-    assert dividends._fetch_pdf("https://x/a.pdf", proxy="http://p") == PDF
+    monkeypatch.setattr(download, "fetch", flaky)
+    assert download._fetch_pdf("https://x/a.pdf", proxy="http://p") == PDF
     assert len(attempts) == 3
 
 
@@ -273,7 +275,7 @@ def test_a_real_404_is_never_retried(monkeypatch: pytest.MonkeyPatch) -> None:
         attempts.append(1)
         raise FetchError(404, "gone")
 
-    monkeypatch.setattr(dividends, "fetch", gone)
+    monkeypatch.setattr(download, "fetch", gone)
     with pytest.raises(FetchError):
-        dividends._fetch_pdf("https://x/a.pdf", proxy="http://p")
+        download._fetch_pdf("https://x/a.pdf", proxy="http://p")
     assert len(attempts) == 1

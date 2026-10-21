@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from pipeline.bronze.feeds import FEEDS
+from pipeline.bronze.core.feeds import FEEDS
 from tests.fake_bronze import FakeMinio, land_live
 
 FROZEN = Path(__file__).resolve().parents[1] / "fixtures" / "frozen"

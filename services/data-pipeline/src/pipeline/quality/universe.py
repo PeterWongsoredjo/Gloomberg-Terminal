@@ -19,9 +19,9 @@ from typing import Any
 
 from minio import Minio
 
-from pipeline.bronze import paths
-from pipeline.bronze.ingest import ingest_dates, read_object
-from pipeline.bronze.sweep import read_manifest
+from pipeline.bronze.core import store
+from pipeline.bronze.core.store import ingest_dates, read_object
+from pipeline.bronze.ops.sweep import read_manifest
 from pipeline.clock import wib_date
 from pipeline.config import BRONZE_BUCKET
 from pipeline.reference.securities import TICKER_RE, profile_rows
@@ -104,7 +104,7 @@ def parse_authority(raw: bytes) -> Any:
 
 def _snapshot_key(minio: Minio, captured_on: date) -> str | None:
     """The profile object filed under one capture date, None when nothing is."""
-    prefix = paths.partition_prefix(PROFILE_SOURCE, PROFILE_DATASET, captured_on, "v1")
+    prefix = store.partition_prefix(PROFILE_SOURCE, PROFILE_DATASET, captured_on, "v1")
     keys = [
         obj.object_name
         for obj in minio.list_objects(BRONZE_BUCKET, prefix=prefix, recursive=True)

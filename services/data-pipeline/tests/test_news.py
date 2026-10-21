@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from pipeline.bronze import news
-from pipeline.bronze.feeds import FEEDS, NEWS_FEEDS
-from pipeline.bronze.news import day_items, parse_rss
+from pipeline.bronze.core.feeds import FEEDS, NEWS_FEEDS
+from pipeline.bronze.news import parse as news
+from pipeline.bronze.news.parse import day_items, parse_rss
 from pipeline.reference.matcher import Registry
 from pipeline.reference.securities import load_baseline
 

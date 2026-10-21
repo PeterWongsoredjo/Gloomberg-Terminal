@@ -34,7 +34,7 @@ docker run --rm --network gloomberg_default \
     "$MC_IMAGE" mirror --overwrite local/gloomberg-bronze /backup
 
 echo "[backup] manifest retention"
-runuser -u "$APP_USER" -- bash -c "cd '$REPO/services/data-pipeline' && '$UV' run python -m pipeline.bronze.retention --apply"
+runuser -u "$APP_USER" -- bash -c "cd '$REPO/services/data-pipeline' && '$UV' run python -m pipeline.bronze.ops.retention --apply"
 
 echo "[backup] prune daily sets older than $KEEP_DAYS days"
 find "$BACKUP_ROOT/daily" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +

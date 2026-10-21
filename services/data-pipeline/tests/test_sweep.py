@@ -8,9 +8,9 @@ from typing import Any, cast
 
 import pytest
 
-from pipeline.bronze import sweep
-from pipeline.bronze.feeds import EOD_FEEDS, FEEDS
-from pipeline.bronze.sweep import landed, unlanded_eod_feeds
+from pipeline.bronze.ops import sweep
+from pipeline.bronze.core.feeds import EOD_FEEDS, FEEDS
+from pipeline.bronze.ops.sweep import landed, unlanded_eod_feeds
 
 TD = date(2026, 8, 13)
 
