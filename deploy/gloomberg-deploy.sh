@@ -19,13 +19,23 @@ QUIET_WAIT_SECONDS=600
 INSTALLED_PATHS=(deploy/systemd deploy/caddy deploy/sudoers deploy/gloomberg-deploy.sh
     deploy/check-env.sh deploy/backup/gloomberg-backup.cron)
 PY_PROJECTS=(services/data-pipeline services/orchestration services/backend-api dbt)
-UNITS=(gloomberg-backend.service gloomberg-web.service gloomberg-prefect-worker.service)
+
+# which folders each service runs from, a change there means a restart
+WORKER_PATHS=(services/data-pipeline services/orchestration dbt)
+BACKEND_PATHS=(services/backend-api)
+WEB_PATHS=(services/web-terminal)
+INFRA_PATHS=(infra)
 
 SHA=""
+FROM_SHA=""
 LIVE=0
-PREV_SHA=""
 PREV_WEB=""
 WEB_RELEASE=""
+DOMAIN=""
+RESTART_WORKER=0
+RESTART_BACKEND=0
+RESTART_WEB=0
+APPLY_INFRA=0
 
 say() { printf '%s  %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 die() { say "ERROR: $*" >&2; exit 1; }
@@ -57,6 +67,7 @@ verify_commit() {
 receive_env() {
     (umask 077 && cat > "$NEW_ENV")
     "$CHECK_ENV" "$NEW_ENV" || die "the new env file is missing values, nothing changed"
+    DOMAIN="$(grep -E '^GLOOMBERG_DOMAIN=' "$NEW_ENV" | head -1 | cut -d= -f2-)"
 }
 
 # stops if the new commit changes anything only root can install
@@ -66,6 +77,32 @@ check_drift() {
         || die "this commit changes system files, run deploy/bootstrap.sh as root instead"
 }
 
+# true if anything under these folders differs between the live and the new commit
+changed() {
+    [ -n "$(git -C "$REPO" diff --name-only "$FROM_SHA" "$SHA" -- "$@")" ]
+}
+
+# works out which services this deploy has to touch
+plan_restarts() {
+    FROM_SHA="$(git -C "$REPO" rev-parse HEAD)"
+    if changed "${WORKER_PATHS[@]}"; then RESTART_WORKER=1; fi
+    if changed "${BACKEND_PATHS[@]}"; then RESTART_BACKEND=1; fi
+    if changed "${WEB_PATHS[@]}"; then RESTART_WEB=1; fi
+    if changed "${INFRA_PATHS[@]}"; then APPLY_INFRA=1; fi
+    if ! cmp -s "$NEW_ENV" "$REPO/.env"; then
+        RESTART_WORKER=1
+        RESTART_BACKEND=1
+        RESTART_WEB=1
+        APPLY_INFRA=1
+    fi
+    say "plan: worker=$RESTART_WORKER backend=$RESTART_BACKEND web=$RESTART_WEB infra=$APPLY_INFRA"
+}
+
+# true when this deploy would cut into a running flow
+touches_flows() {
+    [ "$RESTART_WORKER" -eq 1 ] || [ "$RESTART_BACKEND" -eq 1 ] || [ "$APPLY_INFRA" -eq 1 ]
+}
+
 # counts busy flow runs, prints nothing when prefect is unreachable
 busy_flow_runs() {
     curl -fsS -m 5 -X POST "$PREFECT_API/flow_runs/count" -H 'Content-Type: application/json' \
@@ -73,9 +110,13 @@ busy_flow_runs() {
         2>/dev/null || true
 }
 
-# waits until no flow is mid run, because a restart would kill it
+# waits until no flow is mid run, only when this deploy would disturb one
 wait_for_quiet() {
     local waited=0 busy
+    if ! touches_flows; then
+        say "this deploy leaves the flows alone, no need to wait"
+        return
+    fi
     while true; do
         busy="$(busy_flow_runs)"
         if [ -z "$busy" ]; then
@@ -93,25 +134,25 @@ wait_for_quiet() {
 
 # builds the web app for this commit in its own folder while the live site keeps serving
 build_web() {
-    local domain
     WEB_RELEASE="$RELEASES/$SHA"
-    if [ -f "$WEB_RELEASE/.build-ok" ]; then
+    if [ "$RESTART_WEB" -eq 0 ]; then
+        return
+    fi
+    if [ "$(cat "$WEB_RELEASE/.build-ok" 2>/dev/null)" = "$DOMAIN" ]; then
         say "web build for this commit already exists"
         return
     fi
     rm -rf "$WEB_RELEASE"
     mkdir -p "$WEB_RELEASE"
     git -C "$REPO" archive "$SHA" services/web-terminal | tar -x -C "$WEB_RELEASE" --strip-components=2
-    domain="$(grep -E '^GLOOMBERG_DOMAIN=' "$NEW_ENV" | head -1 | cut -d= -f2-)"
     (cd "$WEB_RELEASE" && nice -n 10 npm ci --no-audit --no-fund \
-        && NEXT_PUBLIC_API_BASE="https://$domain/api/v1" NEXT_PUBLIC_API_TOKEN="" \
+        && NEXT_PUBLIC_API_BASE="https://$DOMAIN/api/v1" NEXT_PUBLIC_API_TOKEN="" \
            NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS="--max-old-space-size=1536" nice -n 10 npm run build)
-    touch "$WEB_RELEASE/.build-ok"
+    printf '%s' "$DOMAIN" > "$WEB_RELEASE/.build-ok"
 }
 
 # remembers what is live now so a failure can put it back
 save_point() {
-    PREV_SHA="$(git -C "$REPO" rev-parse HEAD)"
     PREV_WEB="$(readlink -f "$CURRENT")"
     cp -p "$REPO/.env" "$PREV_ENV"
 }
@@ -122,12 +163,16 @@ point_web_at() {
     mv -T "$CURRENT.next" "$CURRENT"
 }
 
-# installs the locked python deps for every service and the dbt packages
+# installs the locked python deps for every service, a no op when nothing changed
 sync_python() {
     local project
     for project in "${PY_PROJECTS[@]}"; do
         (cd "$REPO/$project" && "$UV" sync --frozen -q)
     done
+}
+
+# installs the dbt packages the worker's flows need
+sync_dbt() {
     (cd "$REPO/dbt" && "$UV" run --no-sync dbt deps >/dev/null)
 }
 
@@ -143,10 +188,17 @@ register_flows() {
         "$UV" run --no-sync python scripts/setup_prefect.py >/dev/null)
 }
 
-# restarts the three app services onto the new code
+# lists the units this deploy restarts
+units_to_restart() {
+    if [ "$RESTART_BACKEND" -eq 1 ]; then echo gloomberg-backend.service; fi
+    if [ "$RESTART_WEB" -eq 1 ]; then echo gloomberg-web.service; fi
+    if [ "$RESTART_WORKER" -eq 1 ]; then echo gloomberg-prefect-worker.service; fi
+}
+
+# restarts only the services whose code or env changed
 restart_apps() {
     local unit
-    for unit in "${UNITS[@]}"; do
+    for unit in $(units_to_restart); do
         sudo -n /usr/bin/systemctl restart "$unit"
     done
 }
@@ -155,7 +207,8 @@ restart_apps() {
 healthy() {
     curl -fs -m 5 http://127.0.0.1:8000/api/v1/health >/dev/null \
         && curl -fs -m 5 http://127.0.0.1:3000 >/dev/null \
-        && systemctl is-active --quiet "${UNITS[@]}"
+        && systemctl is-active --quiet gloomberg-backend.service gloomberg-web.service \
+            gloomberg-prefect-worker.service
 }
 
 # gives the new version a minute to come up healthy
@@ -168,16 +221,25 @@ wait_healthy() {
     return 1
 }
 
-# switches code, env, deps, flows and web over to the new commit
+# switches the box to one commit, touching only what the plan says
+switch_to() {
+    local rev="$1" env_file="$2" web="$3"
+    git -C "$REPO" checkout -q --detach "$rev"
+    cp -p "$env_file" "$REPO/.env"
+    sync_python
+    if [ "$APPLY_INFRA" -eq 1 ]; then apply_infra; fi
+    if [ "$RESTART_WORKER" -eq 1 ]; then
+        sync_dbt
+        register_flows
+    fi
+    if [ "$RESTART_WEB" -eq 1 ]; then point_web_at "$web"; fi
+    restart_apps
+}
+
+# puts the new commit live and checks it is healthy
 go_live() {
     LIVE=1
-    git -C "$REPO" checkout -q --detach "$SHA"
-    mv "$NEW_ENV" "$REPO/.env"
-    sync_python
-    apply_infra
-    register_flows
-    point_web_at "$WEB_RELEASE"
-    restart_apps
+    switch_to "$SHA" "$NEW_ENV" "$WEB_RELEASE"
     wait_healthy || die "the new version is not healthy"
 }
 
@@ -185,13 +247,8 @@ go_live() {
 roll_back() {
     LIVE=0
     set +e
-    say "rolling back to $PREV_SHA"
-    git -C "$REPO" checkout -q --detach "$PREV_SHA"
-    cp -p "$PREV_ENV" "$REPO/.env"
-    sync_python
-    register_flows
-    point_web_at "$PREV_WEB"
-    restart_apps
+    say "rolling back to $FROM_SHA"
+    switch_to "$FROM_SHA" "$PREV_ENV" "$PREV_WEB"
     if wait_healthy; then
         say "ROLLED BACK, the previous version is live again"
     else
@@ -201,10 +258,11 @@ roll_back() {
 
 # keeps the newest few web builds and never deletes the live or previous one
 prune_releases() {
-    local rel
+    local rel live
+    live="$(readlink -f "$CURRENT")"
     find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn \
         | tail -n +"$((KEEP_RELEASES + 1))" | cut -d' ' -f2- | while read -r rel; do
-            [ "$rel" = "$WEB_RELEASE" ] || [ "$rel" = "$PREV_WEB" ] || rm -rf "$rel"
+            [ "$rel" = "$live" ] || [ "$rel" = "$PREV_WEB" ] || rm -rf "$rel"
         done
 }
 
@@ -231,6 +289,7 @@ main() {
     verify_commit
     receive_env
     check_drift
+    plan_restarts
     wait_for_quiet
     build_web
     save_point

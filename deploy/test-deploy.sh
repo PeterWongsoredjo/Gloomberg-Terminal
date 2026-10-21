@@ -61,6 +61,8 @@ git add -A && git commit -qm base
 C1=$(git rev-parse HEAD)
 echo v2 > services/backend-api/app.txt && git commit -qam good && C2=$(git rev-parse HEAD)
 echo v3 > services/backend-api/app.txt && git commit -qam broken && C3=$(git rev-parse HEAD)
+echo "{\"name\":\"web2\"}" > services/web-terminal/package.json && git commit -qam web && C5=$(git rev-parse HEAD)
+echo notes > README.md && git add README.md && git commit -qm docs && C6=$(git rev-parse HEAD)
 echo "# changed" >> deploy/systemd/gloomberg-web.service && git commit -qam drift && C4=$(git rev-parse HEAD)
 git checkout -q -b side "$C2" && echo side > side.txt && git add side.txt && git commit -qm side && CSIDE=$(git rev-parse HEAD)
 git checkout -q main && git reset -q --hard "$C3"
@@ -134,10 +136,33 @@ echo "5. prefect down still deploys"
 run "$C3" FAKE_PREFECT_DOWN=1
 check "deploys with a warning" "[ \$(cat $T/rc) = 0 ] && grep -q 'prefect is unreachable' $T/out.log && head_is $C3"
 
-echo "6. redeploy reuses the build"
+echo "6. backend only change restarts only the backend"
 : > "$T/calls.log"
 run "$C2"
-check "no rebuild for a built commit" "[ \$(cat $T/rc) = 0 ] && ! grep -q 'run build' $T/calls.log && web_is $BASE/web-releases/$C2"
+check "deploys" "[ \$(cat $T/rc) = 0 ] && head_is $C2"
+check "one restart, the backend" "[ \$(grep -c 'systemctl restart' $T/calls.log) = 1 ] && grep -q 'restart gloomberg-backend' $T/calls.log"
+check "no web build" "! grep -q 'run build' $T/calls.log"
+
+echo "7. web only change skips the flow wait"
+run "$C3"
+: > "$T/calls.log"
+run "$C5" FAKE_BUSY=2 QUIET=0
+check "deploys while flows are busy" "[ \$(cat $T/rc) = 0 ] && grep -q 'leaves the flows alone' $T/out.log && head_is $C5"
+check "one restart, the web" "[ \$(grep -c 'systemctl restart' $T/calls.log) = 1 ] && grep -q 'restart gloomberg-web' $T/calls.log"
+check "web points at the new release" "web_is $BASE/web-releases/$C5"
+
+echo "8. docs only change restarts nothing"
+: > "$T/calls.log"
+run "$C6" FAKE_BUSY=2 QUIET=0
+check "deploys while flows are busy" "[ \$(cat $T/rc) = 0 ] && head_is $C6"
+check "no restarts" "! grep -q 'systemctl restart' $T/calls.log"
+check "web untouched" "web_is $BASE/web-releases/$C5"
+
+echo "9. going back to a built commit reuses its build"
+: > "$T/calls.log"
+run "$C2"
+check "deploys" "[ \$(cat $T/rc) = 0 ] && head_is $C2"
+check "no rebuild" "! grep -q 'run build' $T/calls.log && web_is $BASE/web-releases/$C2"
 
 echo
 echo "result: $pass passed, $fail failed"
