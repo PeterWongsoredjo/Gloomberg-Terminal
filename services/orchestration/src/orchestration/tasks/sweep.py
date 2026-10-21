@@ -10,10 +10,13 @@ from typing import Any
 from minio import Minio
 from prefect import task
 
-from pipeline.bronze.dividends import PDF_DATASET, land_attachments
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import FetchError, client, fetch_and_land
-from pipeline.bronze.sweep import landed, unlanded_eod_feeds
+from pipeline.bronze.dividends.announcements import PDF_DATASET
+from pipeline.bronze.dividends.land import land_attachments
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.http import FetchError
+from pipeline.bronze.core.land import fetch_and_land
+from pipeline.bronze.core.store import client
+from pipeline.bronze.ops.sweep import landed, unlanded_eod_feeds
 from pipeline.config import get_settings
 
 from orchestration.config import OrchestrationConfig, get_config

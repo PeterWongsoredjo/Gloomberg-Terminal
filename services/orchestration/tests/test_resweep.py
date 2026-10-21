@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from pipeline.bronze.ingest import FetchError
+from pipeline.bronze.core.http import FetchError
 
 from orchestration import flow_sweep
 from orchestration.results import PhaseResult

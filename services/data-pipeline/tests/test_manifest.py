@@ -4,8 +4,8 @@ from typing import Any, cast
 
 import pytest
 
-from pipeline.bronze import ingest, manifest
-from pipeline.bronze.feeds import FEEDS
+from pipeline.bronze.core import land, manifest
+from pipeline.bronze.core.feeds import FEEDS
 
 
 def _build(missing: list[str], expected: int) -> dict[str, Any]:
@@ -75,14 +75,14 @@ def test_fetch_and_land_never_claims_a_universe_it_did_not_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The bug: a short payload used to land SUCCESS at coverage 1.0 on its own say-so."""
-    monkeypatch.setattr(ingest, "_put", lambda *a, **kw: None)
+    monkeypatch.setattr(land, "put", lambda *a, **kw: None)
     monkeypatch.setattr(
-        ingest, "fetch", lambda url, proxy=None: json.dumps(
+        land, "fetch", lambda url, proxy=None: json.dumps(
             {"recordsTotal": 959, "data": [{"StockCode": "AADI"}] * 912}
         ).encode()
     )
 
-    landed = ingest.fetch_and_land(cast(Any, None), FEEDS["daily_trade"], date(2026, 7, 2))
+    landed = land.fetch_and_land(cast(Any, None), FEEDS["daily_trade"], date(2026, 7, 2))
 
     assert landed["quality"]["coverage_ratio"] is None
     assert landed["quality"]["expected_universe"] is None
@@ -96,14 +96,14 @@ def test_a_complete_universe_payload_still_awaits_the_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Even a whole payload is unverified until something compares it to the universe."""
-    monkeypatch.setattr(ingest, "_put", lambda *a, **kw: None)
+    monkeypatch.setattr(land, "put", lambda *a, **kw: None)
     monkeypatch.setattr(
-        ingest, "fetch", lambda url, proxy=None: json.dumps(
+        land, "fetch", lambda url, proxy=None: json.dumps(
             {"recordsTotal": 2, "data": [{"StockCode": "AADI"}, {"StockCode": "BBCA"}]}
         ).encode()
     )
 
-    landed = ingest.fetch_and_land(cast(Any, None), FEEDS["daily_trade"], date(2026, 7, 2))
+    landed = land.fetch_and_land(cast(Any, None), FEEDS["daily_trade"], date(2026, 7, 2))
 
     assert landed["status"] == "PARTIAL"
     assert landed["notes"] == "coverage not evaluated yet"
@@ -113,14 +113,14 @@ def test_a_side_feed_lands_clean_without_inventing_coverage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """index_level has no security universe, so it reports nothing rather than 1.0."""
-    monkeypatch.setattr(ingest, "_put", lambda *a, **kw: None)
+    monkeypatch.setattr(land, "put", lambda *a, **kw: None)
     monkeypatch.setattr(
-        ingest, "fetch", lambda url, proxy=None: json.dumps(
+        land, "fetch", lambda url, proxy=None: json.dumps(
             {"recordsTotal": 2, "data": [{"IndexCode": "IHSG"}, {"IndexCode": "LQ45"}]}
         ).encode()
     )
 
-    landed = ingest.fetch_and_land(cast(Any, None), FEEDS["index_level"], date(2026, 7, 2))
+    landed = land.fetch_and_land(cast(Any, None), FEEDS["index_level"], date(2026, 7, 2))
 
     assert landed["status"] == "SUCCESS"
     assert landed["quality"]["coverage_ratio"] is None
@@ -133,8 +133,8 @@ def test_land_payloads_carries_a_caller_status_and_note(monkeypatch: pytest.Monk
     def fake_put(minio: Any, key: str, data: bytes, content_type: str) -> None:
         written[key] = data
 
-    monkeypatch.setattr(ingest, "_put", fake_put)
-    landed = ingest.land_payloads(
+    monkeypatch.setattr(land, "put", fake_put)
+    landed = land.land_payloads(
         cast(Any, None),
         source="corporate_actions",
         dataset="dividend_attachments",
@@ -158,14 +158,14 @@ def test_more_rows_than_the_upstream_declared_is_flagged_too(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An upstream contradicting itself in either direction has not sent a clean payload."""
-    monkeypatch.setattr(ingest, "_put", lambda *a, **kw: None)
+    monkeypatch.setattr(land, "put", lambda *a, **kw: None)
     monkeypatch.setattr(
-        ingest, "fetch", lambda url, proxy=None: json.dumps(
+        land, "fetch", lambda url, proxy=None: json.dumps(
             {"recordsTotal": 2, "data": [{"IndexCode": c} for c in ("IHSG", "LQ45", "EXTRA")]}
         ).encode()
     )
 
-    landed = ingest.fetch_and_land(cast(Any, None), FEEDS["index_level"], date(2026, 7, 2))
+    landed = land.fetch_and_land(cast(Any, None), FEEDS["index_level"], date(2026, 7, 2))
 
     assert landed["status"] == "PARTIAL"
     assert landed["notes"] == "upstream declared 2 rows, 3 arrived"

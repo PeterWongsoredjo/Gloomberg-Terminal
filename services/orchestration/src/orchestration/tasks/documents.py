@@ -8,9 +8,10 @@ from datetime import date
 
 from prefect import task
 
-from pipeline.bronze.dividend_text import land_filing_text
-from pipeline.bronze.dividends import PDF_DATASET, land_attachments
-from pipeline.bronze.ingest import client
+from pipeline.bronze.dividends.announcements import PDF_DATASET
+from pipeline.bronze.dividends.land import land_attachments
+from pipeline.bronze.dividends.text import land_filing_text
+from pipeline.bronze.core.store import client
 from pipeline.config import get_settings
 
 from orchestration.results import PhaseResult

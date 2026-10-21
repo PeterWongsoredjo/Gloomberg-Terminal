@@ -8,8 +8,8 @@ from datetime import date
 import pytest
 
 from pipeline.agentic import artifact_land
-from pipeline.bronze.ingest import ingest_dates
-from pipeline.bronze.news import unnormalized_dates
+from pipeline.bronze.core.store import ingest_dates
+from pipeline.bronze.news.parse import unnormalized_dates
 from tests.fake_bronze import FakeMinio
 
 

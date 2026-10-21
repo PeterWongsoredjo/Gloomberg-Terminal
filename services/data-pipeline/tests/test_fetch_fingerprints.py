@@ -8,7 +8,7 @@ from typing import Any, get_args
 import pytest
 from curl_cffi.requests import BrowserTypeLiteral
 
-from pipeline.bronze.ingest import FINGERPRINTS, FetchError, fetch, is_transient_fetch
+from pipeline.bronze.core.http import fetch, FetchError, FINGERPRINTS, is_transient_fetch
 
 URL = "https://www.idx.co.id/primary/TradingSummary/GetIndexSummary"
 PROXY = "http://user:pass@p.webshare.io:80"

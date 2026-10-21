@@ -1,10 +1,3 @@
-"""
-Normalizes raw RSS news into the JSON news items the sentiment flow reads.
-
-Parsing only. Deciding which issuer a headline is about needs the registry, and
-Bronze holds what the publisher sent, never what we concluded from it.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -16,9 +9,10 @@ from xml.etree import ElementTree
 
 from minio import Minio
 
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import client, ingest_dates, land_payloads, read_object
-from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.land import land_payloads
+from pipeline.bronze.core.store import client, ingest_dates, read_object
+from pipeline.bronze.core.manifest import deterministic_run_id, idempotency_key
 from pipeline.config import BRONZE_BUCKET, get_settings
 from pipeline.reference.matcher import Registry
 
@@ -71,7 +65,6 @@ def parse_rss(xml: bytes, source_dataset: str) -> list[dict[str, Any]]:
 
 
 def tag_items(items: list[dict[str, Any]], registry: Registry) -> list[dict[str, Any]]:
-    """Resolves each item's real tickers against the registry, names and codes alike."""
     for item in items:
         match = registry.match(str(item["title"]), str(item.get("summary") or ""))
         item["tickers"] = match.tickers
@@ -80,7 +73,6 @@ def tag_items(items: list[dict[str, Any]], registry: Registry) -> list[dict[str,
 
 
 def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
-    """The day's raw payloads, asked for by path so the store does the filtering."""
     out = []
     for dataset in sorted(_ACTIVE_DATASETS):
         prefix = f"news_rss/{dataset}/ingest_date={trade_date.isoformat()}/"
@@ -93,7 +85,6 @@ def _read_raw(minio: Minio, trade_date: date) -> list[tuple[str, bytes]]:
 
 
 def day_items(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
-    """Parses and dedups every raw RSS payload landed for the date."""
     seen: dict[str, dict[str, Any]] = {}
     for dataset, raw in _read_raw(minio, trade_date):
         for item in parse_rss(raw, dataset):
@@ -102,7 +93,6 @@ def day_items(minio: Minio, trade_date: date) -> list[dict[str, Any]]:
 
 
 def unnormalized_dates(minio: Minio) -> list[date]:
-    """Days we captured raw RSS for but never parsed into news items."""
     raw: set[date] = set()
     for dataset in sorted(_ACTIVE_DATASETS):
         raw |= ingest_dates(minio, f"news_rss/{dataset}/")

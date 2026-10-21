@@ -16,10 +16,10 @@ from typing import Any
 
 from minio import Minio
 
-from pipeline.bronze.feeds import FeedSpec
-from pipeline.bronze.ingest import write_manifest
-from pipeline.bronze.manifest import quality_block
-from pipeline.bronze.sweep import read_manifest
+from pipeline.bronze.core.feeds import FeedSpec
+from pipeline.bronze.core.land import write_manifest
+from pipeline.bronze.core.manifest import quality_block
+from pipeline.bronze.ops.sweep import read_manifest
 from pipeline.quality.coverage import CoverageResult
 
 # worst wins, so neither verdict can be talked up by the other

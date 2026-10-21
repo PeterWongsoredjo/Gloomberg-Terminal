@@ -6,9 +6,10 @@ from typing import Any
 
 from prefect import task
 
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import client, emit_failed_manifest, fetch_and_land
-from pipeline.bronze.loader import load_fixtures
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.land import emit_failed_manifest, fetch_and_land
+from pipeline.bronze.core.store import client
+from pipeline.bronze.fixtures.loader import load_fixtures
 from pipeline.config import get_settings
 
 from orchestration.retries import (

@@ -9,8 +9,8 @@ from datetime import date
 from prefect import task
 
 from pipeline.agentic.artifact_land import land_artifacts, unlanded_dates
-from pipeline.bronze.ingest import client
-from pipeline.bronze.news import normalize_from_bronze, unnormalized_dates
+from pipeline.bronze.core.store import client
+from pipeline.bronze.news.parse import normalize_from_bronze, unnormalized_dates
 from pipeline.config import get_settings
 
 from orchestration.results import PhaseResult

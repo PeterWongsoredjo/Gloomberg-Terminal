@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from pipeline.bronze.retention import prune_candidates
+from pipeline.bronze.ops.retention import prune_candidates
 
 TODAY = date(2026, 7, 19)
 KEEP = 90

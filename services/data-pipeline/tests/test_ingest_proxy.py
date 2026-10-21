@@ -7,9 +7,9 @@ from typing import Any, cast
 
 import pytest
 
-from pipeline.bronze import ingest
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import FetchError, is_transient_fetch
+from pipeline.bronze.core import land
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.http import FetchError, is_transient_fetch
 
 TD = date(2026, 7, 14)
 
@@ -40,12 +40,12 @@ def test_idx_feed_is_fetched_through_the_proxy(monkeypatch: pytest.MonkeyPatch) 
         seen["proxy"] = proxy
         return b"{}"
 
-    monkeypatch.setattr(ingest, "fetch", fake_fetch)
-    monkeypatch.setattr(ingest, "land_payloads", lambda *a, **kw: {})
+    monkeypatch.setattr(land, "fetch", fake_fetch)
+    monkeypatch.setattr(land, "land_payloads", lambda *a, **kw: {})
 
     spec = FEEDS["daily_trade"]
     assert spec.needs_proxy
-    ingest.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
+    land.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
 
     assert seen["proxy"] == "http://user:pass@p.webshare.io:80"
 
@@ -58,12 +58,12 @@ def test_news_feed_never_uses_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None
         seen["proxy"] = proxy
         return b"<rss/>"
 
-    monkeypatch.setattr(ingest, "fetch", fake_fetch)
-    monkeypatch.setattr(ingest, "land_payloads", lambda *a, **kw: {})
+    monkeypatch.setattr(land, "fetch", fake_fetch)
+    monkeypatch.setattr(land, "land_payloads", lambda *a, **kw: {})
 
     spec = FEEDS["news_cnbc"]
     assert not spec.needs_proxy
-    ingest.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
+    land.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
 
     assert seen["proxy"] is None
 
@@ -76,11 +76,11 @@ def test_kontan_goes_through_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
         seen["proxy"] = proxy
         return b"<rss/>"
 
-    monkeypatch.setattr(ingest, "fetch", fake_fetch)
-    monkeypatch.setattr(ingest, "land_payloads", lambda *a, **kw: {})
+    monkeypatch.setattr(land, "fetch", fake_fetch)
+    monkeypatch.setattr(land, "land_payloads", lambda *a, **kw: {})
 
     spec = FEEDS["news_kontan"]
     assert spec.needs_proxy
-    ingest.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
+    land.fetch_and_land(cast(Any, None), spec, TD, proxy="http://user:pass@p.webshare.io:80")
 
     assert seen["proxy"] == "http://user:pass@p.webshare.io:80"

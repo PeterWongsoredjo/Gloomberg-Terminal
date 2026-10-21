@@ -13,7 +13,7 @@ from prefect import Task
 from prefect.client.schemas.objects import State, TaskRun
 from prefect.tasks import exponential_backoff
 
-from pipeline.bronze.ingest import FetchError, is_transient_fetch
+from pipeline.bronze.core.http import FetchError, is_transient_fetch
 
 from orchestration.errors import DbtTransientError, TriggerTransientError
 

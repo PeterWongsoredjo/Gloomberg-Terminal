@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from prefect import task
 
-from pipeline.bronze.ingest import client
+from pipeline.bronze.core.store import client
 from pipeline.config import get_settings
 from pipeline.reference import store
 from pipeline.reference.matcher import Registry

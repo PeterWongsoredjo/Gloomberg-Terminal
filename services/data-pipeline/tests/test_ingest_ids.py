@@ -1,9 +1,9 @@
 from datetime import date
 
-from pipeline.bronze import paths
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import run_id_for
-from pipeline.bronze.manifest import deterministic_run_id, idempotency_key
+from pipeline.bronze.core import store
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.policy import run_id_for
+from pipeline.bronze.core.manifest import deterministic_run_id, idempotency_key
 
 TD = date(2026, 7, 14)
 
@@ -35,6 +35,6 @@ def test_all_news_feeds_accumulate_and_eod_feeds_replace() -> None:
 
 def test_failed_and_success_manifests_share_one_key_per_eod_scope() -> None:
     spec = FEEDS["index_level"]
-    key = paths.manifest_key(spec.source, spec.dataset, TD, run_id_for(spec, TD))
-    again = paths.manifest_key(spec.source, spec.dataset, TD, run_id_for(spec, TD))
+    key = store.manifest_key(spec.source, spec.dataset, TD, run_id_for(spec, TD))
+    again = store.manifest_key(spec.source, spec.dataset, TD, run_id_for(spec, TD))
     assert key == again

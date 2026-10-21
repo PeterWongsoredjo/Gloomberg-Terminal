@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from pipeline.bronze.feeds import FEEDS
+from pipeline.bronze.core.feeds import FEEDS
 from pipeline.quality import coverage, lifecycle, revise, universe
 from tests.fake_bronze import FakeMinio, land_live
 
@@ -494,14 +494,18 @@ def test_measure_fails_closed_when_nothing_landed(monkeypatch: pytest.MonkeyPatc
 
 def test_bronze_landing_has_no_registry_or_database_dependency() -> None:
     """Raw landing holds the upstream bytes and nothing that needs looking anything up."""
-    source = (
-        Path(universe.__file__).resolve().parents[1] / "bronze" / "ingest.py"
-    ).read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    core = Path(universe.__file__).resolve().parents[1] / "bronze" / "core"
+    sources = sorted(core.glob("*.py"))
+    assert len(sources) >= 6
+    trees = [ast.parse(source.read_text(encoding="utf-8")) for source in sources]
     imported = {
-        node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+        node.module or ""
+        for tree in trees
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
     } | {
         alias.name
+        for tree in trees
         for node in ast.walk(tree)
         if isinstance(node, ast.Import)
         for alias in node.names

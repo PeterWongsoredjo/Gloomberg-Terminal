@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from minio import Minio
 
-from pipeline.bronze.ingest import read_object
+from pipeline.bronze.core.store import read_object
 from pipeline.config import BRONZE_BUCKET
 from pipeline.reference.securities import Security, load_baseline, securities_from_profiles
 from pipeline.reference.store import write

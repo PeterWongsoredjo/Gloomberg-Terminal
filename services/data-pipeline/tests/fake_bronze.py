@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 from minio.error import S3Error
 
-from pipeline.bronze import ingest
-from pipeline.bronze.feeds import FeedSpec
+from pipeline.bronze.core import land
+from pipeline.bronze.core.feeds import FeedSpec
 
 
 class _Response:
@@ -69,6 +69,6 @@ def land_live(
     captured_on: date,
 ) -> dict[str, Any]:
     """Runs the real fetch_and_land against the fake bucket, with the clock pinned."""
-    monkeypatch.setattr(ingest, "fetch", lambda url, proxy=None: payload)
-    monkeypatch.setattr(ingest, "now_utc", lambda: at_wib_noon(captured_on))
-    return ingest.fetch_and_land(fake, spec, trade_date)  # type: ignore[arg-type]
+    monkeypatch.setattr(land, "fetch", lambda url, proxy=None: payload)
+    monkeypatch.setattr(land, "now_utc", lambda: at_wib_noon(captured_on))
+    return land.fetch_and_land(fake, spec, trade_date)  # type: ignore[arg-type]

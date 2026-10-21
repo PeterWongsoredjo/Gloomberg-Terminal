@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.ingest import url_for
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.http import url_for
 
 TD = date(2026, 8, 12)
 

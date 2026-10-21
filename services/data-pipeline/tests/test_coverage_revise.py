@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from pipeline.bronze import ingest, paths
-from pipeline.bronze.feeds import FEEDS
-from pipeline.bronze.manifest import coverage_evaluated
+from pipeline.bronze.core import land, store
+from pipeline.bronze.core.feeds import FEEDS
+from pipeline.bronze.core.manifest import coverage_evaluated
 from pipeline.quality import revise
 from pipeline.quality.coverage import CoverageResult
 
@@ -35,16 +35,16 @@ def _landed(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, bytes], dict[str
     """Lands a daily-trade run the way live ingest does, and captures what it wrote."""
     written: dict[str, bytes] = {}
     monkeypatch.setattr(
-        ingest, "_put", lambda minio, key, data, content_type: written.__setitem__(key, data)
+        land, "put", lambda minio, key, data, content_type: written.__setitem__(key, data)
     )
     monkeypatch.setattr(
-        ingest,
+        land,
         "fetch",
         lambda url, proxy=None: json.dumps(
             {"recordsTotal": 3, "data": [{"StockCode": t} for t in ("AADI", "BBCA", "TLKM")]}
         ).encode(),
     )
-    manifest = ingest.fetch_and_land(None, DAILY_TRADE, TD)  # type: ignore[arg-type]
+    manifest = land.fetch_and_land(None, DAILY_TRADE, TD)  # type: ignore[arg-type]
     return written, manifest
 
 
@@ -73,7 +73,7 @@ def test_revision_fills_in_the_measured_numbers(monkeypatch: pytest.MonkeyPatch)
 def test_revision_lands_on_the_same_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """One manifest per run, so dbt, the resweep and telemetry all read one thing."""
     written, landed = _landed(monkeypatch)
-    key = paths.manifest_key("idx_summary", "daily_trade", TD, landed["ingest_run_id"])
+    key = store.manifest_key("idx_summary", "daily_trade", TD, landed["ingest_run_id"])
     assert key in written
 
     monkeypatch.setattr(

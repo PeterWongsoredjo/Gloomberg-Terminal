@@ -1,7 +1,3 @@
-"""
-The one registry of upstream Bronze feeds, shared by fixture capture and live ingest.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,15 +16,14 @@ class FeedSpec:
     ext: str = "json"
     is_universe: bool = False
     date_scoped: bool = False
-    # the upstream answers for right now, so its partition records capture, not coverage
+    # upstream answers for now, so partition records capture time
     current_state: bool = False
     accumulates: bool = False
     needs_proxy: bool = False
-    # how many days back the url window starts, so a missed day self heals
+    # days the url window reaches back, so missed days heal
     lookback_days: int = 0
 
 
-# the five live-tested JSON feeds plus the curated news RSS feeds
 FEEDS: dict[str, FeedSpec] = {
     "daily_trade": FeedSpec(
         source="idx_summary",
@@ -61,7 +56,7 @@ FEEDS: dict[str, FeedSpec] = {
     "dividend_announcements": FeedSpec(
         source="corporate_actions",
         dataset="dividend_announcements",
-        # dividen is a substring of dividend, so it catches both languages
+        # dividen matches dividend too, so both languages are caught
         url=IDX + "/ListedCompany/GetAnnouncement?kodeEmiten=&emitenType=s&indexFrom=0"
                   "&pageSize=100&dateFrom={ymd_from}&dateTo={ymd}&lang=en&keyword=dividen",
         date_scoped=True,
@@ -100,7 +95,6 @@ FEEDS: dict[str, FeedSpec] = {
     ),
 }
 
-# the subset that a daily EOD flow ingests (news has its own lighter cadence)
 EOD_FEEDS = [name for name, spec in FEEDS.items() if spec.source != "news_rss"]
 NEWS_FEEDS = [name for name, spec in FEEDS.items() if spec.source == "news_rss"]
 
